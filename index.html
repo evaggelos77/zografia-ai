@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Ζωγραφιά με Ζωή AI</title>
+  <meta name="description" content="Η ζωγραφιά του παιδιού ζωντανεύει: μιλάει, αφηγείται μια χαρούμενη ιστορία και ακούγεται με γυναικεία AI φωνή στα Ελληνικά." />
+  <meta name="theme-color" content="#ff6cc7" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Ζωγραφιά" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icon-512.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="bg-stars"></div>
+    <div class="bg-blob blob-a"></div>
+    <div class="bg-blob blob-b"></div>
+    <div class="bg-blob blob-c"></div>
+  </div>
+
+  <button id="installBtn" type="button" hidden title="Εγκατάσταση" aria-label="Install"
+    style="position:fixed;top:14px;right:14px;z-index:9999;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:62px;background:rgba(255,255,255,.92);border:1px solid #e8c4ff;color:#7b3fff;border-radius:14px;padding:6px 10px;line-height:1;cursor:pointer;box-shadow:0 8px 22px rgba(123,63,255,.25);font-weight:900">
+    <span style="font-size:18px;font-weight:900">⇩</span>
+    <span style="font-size:10px;letter-spacing:.4px">Install</span>
+  </button>
+
+  <main id="app" aria-live="polite"></main>
+
+  <input id="fileInput"   type="file" accept="image/*" hidden />
+  <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+  <canvas id="resizeCanvas" hidden></canvas>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+    (function () {
+      let deferred = null;
+      const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+      const btn = document.getElementById('installBtn');
+      function show() { if (btn && !standalone) btn.hidden = false; }
+      window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; show(); });
+      window.addEventListener('appinstalled', () => { if (btn) btn.hidden = true; });
+      if (!standalone) show();
+      if (btn) btn.addEventListener('click', async () => {
+        if (deferred) { deferred.prompt(); try { await deferred.userChoice; } catch (e) {} deferred = null; btn.hidden = true; return; }
+        alert("📲 Εγκατέστησε τη Ζωγραφιά με Ζωή σαν εφαρμογή:\n\n📱 iPhone (Safari): πάτα «Κοινή χρήση» (το τετράγωνο με ↑) → «Προσθήκη στην οθόνη Αφετηρίας».\n🤖 Android (Chrome): μενού ⋮ → «Εγκατάσταση εφαρμογής».\n💻 Υπολογιστής (Chrome/Edge): το εικονίδιο εγκατάστασης στη γραμμή διεύθυνσης, ή μενού → «Εγκατάσταση εφαρμογής».\n\nΘα γίνει εικονίδιο στην οθόνη και θα ανοίγει σε πλήρη οθόνη — σαν κανονικό app!");
+      });
+    })();
+  </script>
+</body>
+</html>
