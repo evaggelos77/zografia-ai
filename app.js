@@ -458,6 +458,30 @@ function resultView() {
   const linesHTML = (r.lines || []).map(l => `
     <div class="bubble"><b>${esc(l.speaker || 'η ζωγραφιά')}</b><p>${esc(l.text || '')}</p></div>
   `).join('');
+
+  // The magic: once AKOOL returns the animated MP4, swap the static drawing
+  // photo for the actual video inside the same frame so the child sees their
+  // own drawing literally come alive in place.
+  const videoUrl = (state.video && state.video.url) || r._video_url || '';
+  const stillImage = r._image || (state.draft && state.draft.image) || '';
+  const heroBlock = videoUrl
+    ? `<div class="result-image is-video">
+         <video src="${esc(videoUrl)}" controls playsinline preload="metadata"
+                poster="${esc(stillImage)}" autoplay muted loop
+                style="display:block;width:100%;height:auto;border-radius:18px;background:#fff"></video>
+         <span class="sparkle s1">✨</span>
+         <span class="sparkle s2">⭐</span>
+         <span class="sparkle s3">💫</span>
+         <span class="sparkle s4">✨</span>
+       </div>`
+    : `<div class="result-image">
+         <img src="${esc(stillImage)}" alt="Η ζωγραφιά σου">
+         <span class="sparkle s1">✨</span>
+         <span class="sparkle s2">⭐</span>
+         <span class="sparkle s3">💫</span>
+         <span class="sparkle s4">✨</span>
+       </div>`;
+
   return `
   <section class="screen">
     <div class="topbar">
@@ -467,15 +491,13 @@ function resultView() {
     </div>
 
     <div class="result-card">
-      <div class="result-image">
-        <img src="${esc(r._image || (state.draft && state.draft.image) || '')}" alt="Η ζωγραφιά σου">
-        <span class="sparkle s1">✨</span>
-        <span class="sparkle s2">⭐</span>
-        <span class="sparkle s3">💫</span>
-        <span class="sparkle s4">✨</span>
-      </div>
+      ${heroBlock}
 
-      ${videoBlock(r)}
+      ${videoUrl
+        ? `<div class="audio-row" style="margin:6px 0 12px">
+             <button class="btn ghost" onclick="(function(u){const a=document.createElement('a');a.href=u;a.download='zografia-video.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);})('${esc(videoUrl)}')">⬇️ Κατέβασε το βίντεο</button>
+           </div>`
+        : videoBlock(r)}
 
       ${r.what_i_see ? `<div class="card highlight" style="margin-bottom:12px"><b>👀 Τι βλέπω</b><small>${esc(r.what_i_see)}</small></div>` : ''}
 
