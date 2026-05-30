@@ -369,7 +369,7 @@ function uploadView() {
         }
       </div>
       <div class="row" style="margin-top:12px">
-        <button class="btn gold" data-action="pick-camera">📷 Τράβα φωτό</button>
+        <button class="btn gold" data-action="open-camera">📷 Τράβα φωτό</button>
         <button class="btn ghost" data-action="pick-file">📁 Από αρχείο</button>
       </div>
     </div>
@@ -743,7 +743,7 @@ async function runAnimate({ regenerate = false } = {}) {
   }
 }
 
-/* ---------- File pickers ---------- */
+/* ---------- File picker ---------- */
 function pickFile(useCamera) {
   const input = useCamera ? $('#cameraInput') : $('#fileInput');
   if (!input) return;
@@ -763,6 +763,129 @@ function pickFile(useCamera) {
   };
   input.click();
 }
+
+/* ---------- Live Camera (getUserMedia) ---------- */
+let _cameraStream = null;
+let _cameraFacing = 'environment'; // 'environment' (back) | 'user' (front)
+
+function showCameraError(msg) {
+  const box = $('#cameraError');
+  if (!box) return;
+  box.textContent = msg;
+  box.hidden = false;
+}
+function hideCameraError() {
+  const box = $('#cameraError');
+  if (box) box.hidden = true;
+}
+
+async function openCamera() {
+  const overlay = $('#cameraOverlay');
+  if (!overlay) return pickFile(true);  // fallback
+  hideCameraError();
+  overlay.hidden = false;
+
+  // Permission / API check
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError('Ο browser δεν υποστηρίζει live κάμερα. Πάτα «Από αρχείο».');
+    return;
+  }
+  if (!window.isSecureContext) {
+    showCameraError('Η κάμερα θέλει HTTPS. Άνοιξε ξανά από zografia-ai.onrender.com.');
+    return;
+  }
+
+  try {
+    if (_cameraStream) stopCamera();
+    _cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: _cameraFacing },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+      audio: false,
+    });
+    const video = $('#cameraVideo');
+    if (video) {
+      video.srcObject = _cameraStream;
+      try { await video.play(); } catch (e) {}
+    }
+  } catch (err) {
+    const name = (err && err.name) || '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      showCameraError('Δεν δόθηκε άδεια για την κάμερα. Πάτα Allow ή χρησιμοποίησε «Από αρχείο».');
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      showCameraError('Δεν βρέθηκε κάμερα. Χρησιμοποίησε «Από αρχείο».');
+    } else {
+      showCameraError('Πρόβλημα κάμερας. Χρησιμοποίησε «Από αρχείο». (' + (name || 'error') + ')');
+    }
+  }
+}
+
+function stopCamera() {
+  if (_cameraStream) {
+    try { _cameraStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    _cameraStream = null;
+  }
+  const video = $('#cameraVideo');
+  if (video) {
+    try { video.pause(); } catch (e) {}
+    video.srcObject = null;
+  }
+}
+
+function closeCamera() {
+  stopCamera();
+  const overlay = $('#cameraOverlay');
+  if (overlay) overlay.hidden = true;
+  hideCameraError();
+}
+
+async function switchCamera() {
+  _cameraFacing = (_cameraFacing === 'environment') ? 'user' : 'environment';
+  await openCamera();
+}
+
+function captureFromCamera() {
+  const video = $('#cameraVideo');
+  if (!_cameraStream || !video || !video.videoWidth) {
+    showCameraError('Πρώτα πάτα Allow / περίμενε να ανοίξει η κάμερα.');
+    return;
+  }
+  const canvas = $('#captureCanvas') || document.createElement('canvas');
+  const w = video.videoWidth, h = video.videoHeight;
+  // downscale to ~1024px max so the backend payload stays small
+  const max = 1024;
+  const scale = Math.min(1, max / Math.max(w, h));
+  canvas.width  = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataURL = canvas.toDataURL('image/jpeg', 0.85);
+  state.draft = state.draft || {};
+  state.draft.image = dataURL;
+  closeCamera();
+  state.screen = 'upload';
+  render();
+}
+
+// Wire camera buttons once (they live in index.html, outside the SPA render).
+(function wireCameraButtons() {
+  function wire() {
+    const closeBtn   = $('#cameraCloseBtn');
+    const captureBtn = $('#cameraCaptureBtn');
+    const switchBtn  = $('#cameraSwitchBtn');
+    if (closeBtn)   closeBtn.addEventListener('click', closeCamera);
+    if (captureBtn) captureBtn.addEventListener('click', captureFromCamera);
+    if (switchBtn)  switchBtn.addEventListener('click', switchCamera);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
 
 /* ---------- Save / open / share ---------- */
 function saveToGallery() {
@@ -873,7 +996,8 @@ document.addEventListener('click', (e) => {
   if (!actEl) return;
   const a = actEl.dataset.action;
   switch (a) {
-    case 'pick-camera': pickFile(true); break;
+    case 'open-camera': openCamera(); break;
+    case 'pick-camera': pickFile(true); break;  // legacy fallback
     case 'pick-file':   pickFile(false); break;
     case 'animate':     runAnimate(); break;
     case 'reanimate':   runAnimate({ regenerate: true }); break;

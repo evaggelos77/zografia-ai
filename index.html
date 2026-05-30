@@ -41,6 +41,23 @@
   <input id="cameraInput" type="file" accept="image/*" capture="environment"
          style="position:fixed;left:-9999px;top:0;opacity:0;width:1px;height:1px;pointer-events:none" />
   <canvas id="resizeCanvas" style="display:none"></canvas>
+  <canvas id="captureCanvas" style="display:none"></canvas>
+
+  <!-- Live Κάμερα overlay (getUserMedia) -->
+  <div id="cameraOverlay" hidden style="position:fixed;inset:0;z-index:99998;background:rgba(20,12,40,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px;gap:12px">
+    <button id="cameraCloseBtn" type="button" aria-label="Κλείσιμο"
+            style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;font-weight:900">×</button>
+    <div style="color:#fff;font-weight:800;font-size:18px;text-align:center;text-shadow:0 2px 8px rgba(0,0,0,.5)">📷 Φωτογράφισε τη ζωγραφιά</div>
+    <div id="cameraError" hidden style="background:rgba(255,80,80,.95);color:#fff;padding:10px 14px;border-radius:12px;max-width:90vw;font-weight:700;text-align:center"></div>
+    <video id="cameraVideo" autoplay playsinline muted
+           style="max-width:100%;max-height:60vh;border-radius:18px;background:#000;box-shadow:0 12px 40px rgba(0,0,0,.5)"></video>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="cameraCaptureBtn" type="button"
+              style="background:linear-gradient(135deg,#ff6cc7,#ffa84d);color:#fff;border:0;border-radius:999px;padding:14px 28px;font-size:18px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(255,108,199,.45)">📸 Τράβα</button>
+      <button id="cameraSwitchBtn" type="button"
+              style="background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:999px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer">🔄 Άλλη κάμερα</button>
+    </div>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
 
