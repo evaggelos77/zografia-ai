@@ -47,35 +47,37 @@
   <div id="cameraOverlay" hidden
        style="position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;z-index:2147483647;background:rgba(15,10,30,.97);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;margin:0">
 
-    <!-- Top bar: title + big close X -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(0,0,0,.35);backdrop-filter:blur(6px)">
-      <div style="color:#fff;font-weight:900;font-size:17px;text-shadow:0 1px 4px rgba(0,0,0,.6)">📷 Φωτογράφισε τη ζωγραφιά</div>
+    <!-- Top bar: title + BIG close button -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);min-height:64px;flex-shrink:0">
+      <div style="color:#fff;font-weight:900;font-size:16px;text-shadow:0 1px 4px rgba(0,0,0,.6)">📷 Κάμερα</div>
       <button id="cameraCloseBtn" type="button" aria-label="Κλείσιμο"
-              style="background:#ff4d6d;color:#fff;border:0;border-radius:14px;min-width:90px;height:46px;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 6px 18px rgba(255,77,109,.45);padding:0 14px">✕ Άκυρο</button>
+              style="background:#ff3b5c;color:#fff;border:0;border-radius:14px;min-width:130px;height:52px;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 8px 22px rgba(255,59,92,.55);padding:0 18px">✕ Πίσω</button>
     </div>
 
-    <!-- Error box (red, prominent) -->
+    <!-- Error box -->
     <div id="cameraError" hidden
-         style="background:#ff4d6d;color:#fff;padding:12px 16px;font-weight:800;text-align:center;font-size:15px;line-height:1.4"></div>
+         style="background:#ff3b5c;color:#fff;padding:14px 16px;font-weight:800;text-align:center;font-size:15px;line-height:1.4;flex-shrink:0"></div>
 
-    <!-- Video: fills available area -->
+    <!-- Video area -->
     <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden;min-height:0;position:relative">
       <video id="cameraVideo" autoplay playsinline muted
              style="width:100%;height:100%;object-fit:contain;background:#000"></video>
-      <!-- Tip overlay when video is black -->
+      <!-- Tip overlay when no stream yet -->
       <div id="cameraTip"
-           style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;font-weight:700;text-shadow:0 2px 8px #000;pointer-events:none;font-size:14px">
-        Πάτα <b>Allow</b> για να δεις την κάμερα.<br>
-        <small style="opacity:.7">Αν δεν εμφανιστεί, πάτα «Άλλη κάμερα» ή «Άκυρο».</small>
+           style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;font-weight:700;text-shadow:0 2px 10px #000;pointer-events:none;font-size:15px;padding:0 16px;max-width:90%">
+        Πάτα <b style="color:#ffd166">Allow</b> για να δεις την κάμερα.<br>
+        <small style="opacity:.85">Αν δεν ανοίξει, πάτα <b>📁 Από αρχείο</b> πιο κάτω.</small>
       </div>
     </div>
 
     <!-- Bottom controls -->
-    <div style="display:flex;gap:10px;align-items:center;justify-content:center;padding:18px 14px 28px;background:rgba(0,0,0,.35);backdrop-filter:blur(6px)">
+    <div style="display:flex;gap:10px;align-items:center;justify-content:center;padding:14px 12px 24px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);flex-wrap:wrap;flex-shrink:0">
       <button id="cameraSwitchBtn" type="button" aria-label="Άλλη κάμερα"
-              style="background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:999px;width:56px;height:56px;font-size:22px;cursor:pointer">🔄</button>
+              style="background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:999px;width:56px;height:56px;font-size:22px;cursor:pointer;flex-shrink:0">🔄</button>
       <button id="cameraCaptureBtn" type="button"
-              style="background:linear-gradient(135deg,#ff6cc7,#ffa84d);color:#fff;border:0;border-radius:999px;padding:18px 36px;font-size:20px;font-weight:900;cursor:pointer;box-shadow:0 12px 32px rgba(255,108,199,.55);min-width:200px">📸 Τράβα</button>
+              style="background:linear-gradient(135deg,#ff6cc7,#ffa84d);color:#fff;border:0;border-radius:999px;padding:18px 32px;font-size:19px;font-weight:900;cursor:pointer;box-shadow:0 12px 32px rgba(255,108,199,.55);min-width:170px">📸 Τράβα</button>
+      <button id="cameraToFileBtn" type="button"
+              style="background:rgba(255,255,255,.95);color:#7b3fff;border:0;border-radius:999px;padding:14px 22px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.3)">📁 Από αρχείο</button>
     </div>
   </div>
 

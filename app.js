@@ -416,12 +416,26 @@ function videoBlock(r) {
   }
   const v = state.video || {};
   if (v.polling || v.status === 'queued' || v.status === 'processing') {
+    // Smooth progress: rises with each poll tick, capped at 95% until video lands.
+    // Polling cap is 45 ticks × 8s ≈ 6 min, so we scale up to 95% over the first 22 ticks (~3 min).
+    const ticks = (typeof _videoPollAttempts === 'number') ? _videoPollAttempts : 0;
+    const pct = Math.min(95, Math.round(5 + (ticks / 22) * 90));
+    const phaseLabel = (v.status === 'processing')
+      ? 'Φτιάχνω την κίνηση…'
+      : (ticks < 4 ? 'Ξεκινάω το AI…' : 'Στην ουρά του AI…');
     return `
       <div class="video-wait">
-        <span class="pulse" aria-hidden="true"></span>
-        <div>
-          <b>🎬 Φτιάχνω το βίντεο της ζωγραφιάς…</b>
-          <small>Παίρνει ~2-3 λεπτά (μερικές φορές λίγο παραπάνω). Στο μεταξύ άκου την ιστορία!</small>
+        <div style="display:flex;align-items:center;gap:12px;width:100%">
+          <span class="pulse" aria-hidden="true"></span>
+          <div style="flex:1;min-width:0">
+            <b>🎬 ${esc(phaseLabel)}</b>
+            <small>~2-3 λεπτά. Στο μεταξύ άκου την ιστορία!</small>
+          </div>
+          <span class="ai-pct" aria-live="polite">${pct}%</span>
+        </div>
+        <div class="ai-progress" aria-label="Πρόοδος βίντεο">
+          <div class="ai-progress-bar" style="width:${pct}%"></div>
+          <div class="ai-progress-shimmer"></div>
         </div>
       </div>`;
   }
@@ -824,7 +838,11 @@ async function openCamera() {
   } catch (err) {
     const name = (err && err.name) || '';
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      showCameraError('Δεν δόθηκε άδεια. Άνοιξε τις ρυθμίσεις site → επίτρεψε κάμερα — ή κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
+      // Permission denied → auto-fallback to file picker so the user is never stuck.
+      closeCamera();
+      toast('Χωρίς άδεια κάμερας — άνοιξα τα αρχεία σου.');
+      setTimeout(() => pickFile(false), 250);
+      return;
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
       // Retry without facingMode constraint
       try {
@@ -837,10 +855,13 @@ async function openCamera() {
         }
         return;
       } catch (err2) {
-        showCameraError('Δεν βρέθηκε κάμερα. Κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
+        closeCamera();
+        toast('Δεν βρέθηκε κάμερα — άνοιξα τα αρχεία σου.');
+        setTimeout(() => pickFile(false), 250);
+        return;
       }
     } else {
-      showCameraError('Πρόβλημα κάμερας (' + (name || 'error') + '). Κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
+      showCameraError('Πρόβλημα κάμερας (' + (name || 'error') + '). Πάτα «📁 Από αρχείο» πιο κάτω ή «✕ Πίσω».');
     }
   }
 }
@@ -902,9 +923,14 @@ function captureFromCamera() {
     const closeBtn   = $('#cameraCloseBtn');
     const captureBtn = $('#cameraCaptureBtn');
     const switchBtn  = $('#cameraSwitchBtn');
+    const toFileBtn  = $('#cameraToFileBtn');
     if (closeBtn)   closeBtn.addEventListener('click', closeCamera);
     if (captureBtn) captureBtn.addEventListener('click', captureFromCamera);
     if (switchBtn)  switchBtn.addEventListener('click', switchCamera);
+    if (toFileBtn)  toFileBtn.addEventListener('click', () => {
+      closeCamera();
+      setTimeout(() => pickFile(false), 200);
+    });
     // Escape key closes the camera too
     document.addEventListener('keydown', (e) => {
       const overlay = $('#cameraOverlay');
