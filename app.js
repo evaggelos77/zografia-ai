@@ -539,8 +539,9 @@ function resultView() {
       ${heroBlock}
 
       ${videoUrl
-        ? `<div class="audio-row" style="margin:6px 0 12px">
-             <button class="btn ghost" onclick="(function(u){const a=document.createElement('a');a.href=u;a.download='zografia-video.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);})('${esc(videoUrl)}')">⬇️ Κατέβασε το βίντεο</button>
+        ? `<div class="audio-row" style="margin:8px 0 14px">
+             <button class="btn primary" data-action="share">📤 Στείλε σε WhatsApp / Viber</button>
+             <button class="btn gold" onclick="(function(u){const a=document.createElement('a');a.href=u;a.download='zografia-zoi.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);})('${esc(videoUrl)}')">⬇️ Κατέβασε</button>
            </div>`
         : videoBlock(r)}
 
@@ -1306,16 +1307,44 @@ function openFromGallery(id) {
 
 async function shareResult() {
   if (!state.result) return;
-  const text = state.result.title + '\n\n' + state.result.story + '\n\n' +
-               (state.result.lines || []).map(l => (l.speaker ? l.speaker + ': ' : '') + l.text).join('\n');
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Η ζωγραφιά μου ζωντάνεψε!', text });
-      return;
+  const r = state.result;
+  const videoUrl = (state.video && state.video.url) || r._video_url || '';
+  const title = r.title || 'Η ζωγραφιά μου ζωντάνεψε!';
+  const text = (r.story || '') + (r.follow_up ? '\n\n' + r.follow_up : '') +
+               '\n\n— Ζωγραφιά με Ζωή AI · evlabsai.gr';
+
+  // 1) Prefer native share with the actual MP4 file (WhatsApp/Viber/Messenger/Mail).
+  if (videoUrl && navigator.share) {
+    toast('Ετοιμάζω το βίντεο για διαμοιρασμό…');
+    try {
+      const resp = await fetch(videoUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const file = new File([blob], 'zografia-zoi.mp4', { type: blob.type || 'video/mp4' });
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+          await navigator.share({ title, text, files: [file] });
+          return;
+        }
+      }
+    } catch (e) {
+      // Fall through to URL/text share.
+      console.warn('file share failed', e);
     }
-  } catch (e) {}
+  }
+
+  // 2) Native share with just the URL + text (no file).
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url: videoUrl || undefined });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;  // user cancelled — quietly stop
+    }
+  }
+
+  // 3) Desktop fallback: copy link to clipboard.
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(videoUrl ? `${title}\n${videoUrl}` : text);
     toast('Αντιγράφηκε στο πρόχειρο 💜');
   } catch (e) {
     toast('Δεν μπόρεσα να κάνω διαμοιρασμό.');
