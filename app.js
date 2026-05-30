@@ -779,15 +779,23 @@ function hideCameraError() {
   if (box) box.hidden = true;
 }
 
+function showCameraTip(show) {
+  const tip = $('#cameraTip');
+  if (tip) tip.style.display = show ? 'block' : 'none';
+}
+
 async function openCamera() {
   const overlay = $('#cameraOverlay');
   if (!overlay) return pickFile(true);  // fallback
   hideCameraError();
+  showCameraTip(true);
   overlay.hidden = false;
+  // Lock background scroll while overlay is open
+  document.body.style.overflow = 'hidden';
 
   // Permission / API check
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showCameraError('Ο browser δεν υποστηρίζει live κάμερα. Πάτα «Από αρχείο».');
+    showCameraError('Ο browser δεν υποστηρίζει live κάμερα. Κλείσε με «Άκυρο» και χρησιμοποίησε «Από αρχείο».');
     return;
   }
   if (!window.isSecureContext) {
@@ -797,6 +805,8 @@ async function openCamera() {
 
   try {
     if (_cameraStream) stopCamera();
+    // Try ideal facingMode first; if that fails on a device without back cam,
+    // catch below and fall back to default.
     _cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: _cameraFacing },
@@ -809,15 +819,28 @@ async function openCamera() {
     if (video) {
       video.srcObject = _cameraStream;
       try { await video.play(); } catch (e) {}
+      showCameraTip(false);
     }
   } catch (err) {
     const name = (err && err.name) || '';
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      showCameraError('Δεν δόθηκε άδεια για την κάμερα. Πάτα Allow ή χρησιμοποίησε «Από αρχείο».');
+      showCameraError('Δεν δόθηκε άδεια. Άνοιξε τις ρυθμίσεις site → επίτρεψε κάμερα — ή κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      showCameraError('Δεν βρέθηκε κάμερα. Χρησιμοποίησε «Από αρχείο».');
+      // Retry without facingMode constraint
+      try {
+        _cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const video = $('#cameraVideo');
+        if (video) {
+          video.srcObject = _cameraStream;
+          try { await video.play(); } catch (e) {}
+          showCameraTip(false);
+        }
+        return;
+      } catch (err2) {
+        showCameraError('Δεν βρέθηκε κάμερα. Κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
+      }
     } else {
-      showCameraError('Πρόβλημα κάμερας. Χρησιμοποίησε «Από αρχείο». (' + (name || 'error') + ')');
+      showCameraError('Πρόβλημα κάμερας (' + (name || 'error') + '). Κλείσε με «Άκυρο» και πάτα «Από αρχείο».');
     }
   }
 }
@@ -839,6 +862,9 @@ function closeCamera() {
   const overlay = $('#cameraOverlay');
   if (overlay) overlay.hidden = true;
   hideCameraError();
+  showCameraTip(true);
+  // Restore background scroll
+  document.body.style.overflow = '';
 }
 
 async function switchCamera() {
@@ -879,6 +905,11 @@ function captureFromCamera() {
     if (closeBtn)   closeBtn.addEventListener('click', closeCamera);
     if (captureBtn) captureBtn.addEventListener('click', captureFromCamera);
     if (switchBtn)  switchBtn.addEventListener('click', switchCamera);
+    // Escape key closes the camera too
+    document.addEventListener('keydown', (e) => {
+      const overlay = $('#cameraOverlay');
+      if (overlay && !overlay.hidden && e.key === 'Escape') closeCamera();
+    });
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', wire);
