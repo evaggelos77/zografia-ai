@@ -4,6 +4,7 @@
 
 const BACKEND = (window.ZOGRAFIA_BACKEND || 'https://zografia-backend.onrender.com').replace(/\/+$/, '');
 const URL_ANIMATE  = BACKEND + '/api/animate-drawing';
+const URL_STATUS   = BACKEND + '/api/animate-status';
 const URL_TTS      = BACKEND + '/api/tts';
 const URL_USAGE    = BACKEND + '/api/usage';
 const URL_CHECKOUT = BACKEND + '/api/checkout';
@@ -49,10 +50,12 @@ const state = {
   result: null,                // animation response
   audio: null,                 // current Audio instance
   audioPlaying: false,
-  usage: null,                 // { plan, used, quota, remaining, is_active, is_full, ... }
+  usage: null,                 // { plan, used, quota, remaining, is_active, is_paid, ... }
   checkoutLoading: '',
   checkoutError: '',
   gallery: loadGallery(),
+  /* AKOOL video state for current result */
+  video: { task_id: '', status: 'none', url: '', polling: false },
 };
 
 function loadGallery() {
@@ -167,6 +170,57 @@ function stopAudio() {
   render();
 }
 
+/* ---------- AKOOL video poll ---------- */
+let _videoPollTimer = null;
+let _videoPollAttempts = 0;
+
+function stopVideoPoll() {
+  if (_videoPollTimer) { clearTimeout(_videoPollTimer); _videoPollTimer = null; }
+  state.video.polling = false;
+}
+
+function startVideoPoll(taskId) {
+  stopVideoPoll();
+  state.video = { task_id: taskId, status: 'queued', url: '', polling: true };
+  _videoPollAttempts = 0;
+  const tick = async () => {
+    _videoPollAttempts += 1;
+    try {
+      const res = await fetch(URL_STATUS + '?task_id=' + encodeURIComponent(taskId));
+      const data = await res.json().catch(() => ({}));
+      const s = data.status || 'queued';
+      state.video.status = s;
+      if (s === 'success' && data.video_url) {
+        state.video.url = data.video_url;
+        state.video.polling = false;
+        _videoPollTimer = null;
+        // also attach to current result so it can be saved to gallery
+        if (state.result) state.result._video_url = data.video_url;
+        render();
+        return;
+      }
+      if (s === 'failed') {
+        state.video.polling = false;
+        _videoPollTimer = null;
+        render();
+        return;
+      }
+    } catch (e) { /* keep polling */ }
+    // up to ~3 minutes (24 ticks × 8s = 192s)
+    if (_videoPollAttempts >= 24) {
+      state.video.status = 'timeout';
+      state.video.polling = false;
+      _videoPollTimer = null;
+      render();
+      return;
+    }
+    render();
+    _videoPollTimer = setTimeout(tick, 8000);
+  };
+  // first poll after 6 sec to give AKOOL a moment
+  _videoPollTimer = setTimeout(tick, 6000);
+}
+
 async function startCheckout(planId) {
   state.checkoutLoading = planId;
   state.checkoutError = '';
@@ -231,7 +285,7 @@ function homeView() {
     <div class="hero">
       <img class="logo" src="assets/logo.png" alt="Ζωγραφιά με Ζωή AI" />
       <h1>Ζωγραφιά με Ζωή AI</h1>
-      <p class="tagline">Η ζωγραφιά σου ζωντανεύει — μιλάει και σου λέει μια μικρή ιστορία ✨</p>
+      <p class="tagline">Η ζωγραφιά σου <b class="rainbow-text">ζωντανεύει!</b> ✨<br>Γίνεται βίντεο, μιλάει και σου λέει μια μαγική ιστορία.</p>
       <div class="pill">${esc(planLabel(state.usage) || 'Δωρεάν δοκιμή')}</div>
     </div>
 
@@ -315,6 +369,43 @@ function loadingView() {
   </section>`;
 }
 
+function videoBlock(r) {
+  // Already have a finished video (from current poll or from gallery)?
+  const finishedUrl = (state.video && state.video.url) || (r && r._video_url) || '';
+  if (finishedUrl) {
+    return `
+      <div class="video-wrap">
+        <video src="${esc(finishedUrl)}" controls playsinline preload="metadata" poster="${esc(r._image || '')}"></video>
+      </div>
+      <div class="audio-row" style="margin:-4px 0 10px">
+        <button class="btn ghost" onclick="(function(u){const a=document.createElement('a');a.href=u;a.download='zografia-video.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);})('${esc(finishedUrl)}')">⬇️ Κατέβασε το βίντεο</button>
+      </div>
+    `;
+  }
+  const v = state.video || {};
+  if (v.polling || v.status === 'queued' || v.status === 'processing') {
+    return `
+      <div class="video-wait">
+        <span class="pulse" aria-hidden="true"></span>
+        <div>
+          <b>🎬 Φτιάχνω το βίντεο της ζωγραφιάς…</b>
+          <small>Παίρνει ~30-60 δευτερόλεπτα. Στο μεταξύ άκου την ιστορία!</small>
+        </div>
+      </div>`;
+  }
+  if (v.status === 'failed' || v.status === 'timeout') {
+    return `
+      <div class="video-wait" style="background:linear-gradient(135deg,#ffe0e0,#fff0f0);border-color:#ffc7c7">
+        <span style="font-size:22px">⚠️</span>
+        <div>
+          <b>Το βίντεο δεν τα κατάφερε αυτή τη φορά.</b>
+          <small>Η φωνή + η ιστορία μένουν εδώ — δοκίμασε ξανά αργότερα.</small>
+        </div>
+      </div>`;
+  }
+  return '';
+}
+
 function resultView() {
   const r = state.result;
   if (!r) { state.screen = 'home'; return homeView(); }
@@ -337,6 +428,8 @@ function resultView() {
         <span class="sparkle s3">💫</span>
         <span class="sparkle s4">✨</span>
       </div>
+
+      ${videoBlock(r)}
 
       ${r.what_i_see ? `<div class="card highlight" style="margin-bottom:12px"><b>👀 Τι βλέπω</b><small>${esc(r.what_i_see)}</small></div>` : ''}
 
@@ -593,6 +686,12 @@ async function runAnimate({ regenerate = false } = {}) {
     if (data.usage) state.usage = data.usage;
     state.screen = 'result';
     state.loading = false;
+    // Reset video state and kick off AKOOL poll if backend started one
+    stopVideoPoll();
+    state.video = { task_id: '', status: 'none', url: '', polling: false };
+    if (data.video_task_id) {
+      startVideoPoll(data.video_task_id);
+    }
     render();
     // auto-play story
     setTimeout(() => { playTTS(data.speakable || data.story || ''); }, 350);
@@ -659,6 +758,7 @@ function saveToGallery() {
         follow_up: state.result.follow_up || '',
         what_i_see: state.result.what_i_see || '',
         image: state.result._image || '',
+        video_url: state.video?.url || state.result._video_url || '',
         thumb,
       };
       state.gallery = [entry, ...state.gallery].slice(0, 24);
@@ -679,10 +779,13 @@ function openFromGallery(id) {
     title: g.title, story: g.story, lines: g.lines,
     follow_up: g.follow_up, what_i_see: g.what_i_see,
     _image: g.image || g.thumb,
+    _video_url: g.video_url || '',
     speakable: (g.story ? g.story + '\n\n' : '') +
                (g.lines || []).map(l => (l.speaker ? l.speaker + ': ' : '') + l.text).join('\n\n') +
                (g.follow_up ? '\n\n' + g.follow_up : ''),
   };
+  stopVideoPoll();
+  state.video = { task_id: '', status: g.video_url ? 'success' : 'none', url: g.video_url || '', polling: false };
   state.draft = { image: g.image || g.thumb };
   state.screen = 'result';
   render();
