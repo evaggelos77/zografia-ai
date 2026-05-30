@@ -540,8 +540,8 @@ function resultView() {
 
       ${videoUrl
         ? `<div class="audio-row" style="margin:8px 0 14px">
-             <button class="btn primary" data-action="share">📤 Στείλε σε WhatsApp / Viber</button>
-             <button class="btn gold" onclick="(function(u){const a=document.createElement('a');a.href=u;a.download='zografia-zoi.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);})('${esc(videoUrl)}')">⬇️ Κατέβασε</button>
+             <button class="btn primary" data-action="share">📤 Στείλε</button>
+             <button class="btn gold" data-action="download-video">💾 Αποθήκευση</button>
            </div>`
         : videoBlock(r)}
 
@@ -1305,6 +1305,44 @@ function openFromGallery(id) {
   render();
 }
 
+async function downloadVideo(url) {
+  if (!url) return;
+  toast('Κατεβάζω το βίντεο…', 2500);
+  let blob;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('http ' + resp.status);
+    blob = await resp.blob();
+  } catch (e) {
+    toast('Πρόβλημα σύνδεσης. Δοκίμασε ξανά.');
+    return;
+  }
+  const file = new File([blob], 'zografia-zoi.mp4', { type: blob.type || 'video/mp4' });
+
+  // Mobile: open the native share/save sheet so the user chooses
+  // Save to Photos / Save to Files / AirDrop / WhatsApp / etc.
+  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+    try {
+      await navigator.share({ files: [file], title: 'Η ζωγραφιά μου ζωντάνεψε' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;  // user cancelled — stop quietly
+      // Otherwise fall through to direct download
+    }
+  }
+
+  // Desktop / fallback: blob URL + <a download> triggers the browser's Save dialog.
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = 'zografia-zoi.mp4';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+}
+
 async function shareResult() {
   if (!state.result) return;
   const r = state.result;
@@ -1420,6 +1458,11 @@ document.addEventListener('click', (e) => {
     case 'coloring-undo':  coloringUndo(); break;
     case 'coloring-clear': coloringClear(); break;
     case 'coloring-done':  coloringDone(); break;
+    case 'download-video': {
+      const url = (state.video && state.video.url) || (state.result && state.result._video_url) || '';
+      if (url) downloadVideo(url);
+      break;
+    }
   }
 });
 
