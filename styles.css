@@ -416,6 +416,58 @@ h1,h2,h3,h4,b,strong{font-weight:900;letter-spacing:-.005em;color:var(--ink)}
 .video-wait b{color:var(--ink);font-size:15.5px;display:block}
 .video-wait small{color:var(--muted);font-size:13px;display:block;margin-top:2px}
 
+/* ──────────────────────────────────────────────────────────────
+   Coloring Studio
+   ────────────────────────────────────────────────────────────── */
+.tmpl-row,.palette-row,.brush-row{
+  display:flex;gap:10px;overflow-x:auto;padding:4px;
+  scrollbar-width:thin;
+}
+.tmpl-pick,.brush-pick{
+  background:#fff;border:2px solid #efe1ff;border-radius:14px;
+  min-width:78px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-family:inherit;color:var(--ink);cursor:pointer;transition:transform .15s, border-color .15s;
+  flex-shrink:0;
+}
+.tmpl-pick.selected,.brush-pick.selected{
+  border-color:var(--coral);transform:translateY(-2px);
+  box-shadow:0 6px 18px rgba(255,108,199,.28);
+}
+.tmpl-pick:active,.brush-pick:active{transform:scale(.96)}
+.tmpl-emoji{font-size:30px;line-height:1}
+.brush-dot{
+  display:block;background:#222;border-radius:50%;
+  min-width:8px;min-height:8px;
+}
+.tmpl-pick small,.brush-pick small{font-size:11px;color:var(--muted);font-weight:700}
+
+.palette-color{
+  width:48px;height:48px;border-radius:50%;border:3px solid #fff;
+  box-shadow:0 4px 10px rgba(0,0,0,.18);cursor:pointer;flex-shrink:0;
+  transition:transform .15s, box-shadow .15s;
+}
+.palette-color.selected{
+  border-color:#222;transform:scale(1.15);
+  box-shadow:0 6px 16px rgba(0,0,0,.32);
+}
+.palette-color:active{transform:scale(.92)}
+
+.coloring-stage{padding:8px;background:#fff;}
+.coloring-canvas-wrap{
+  position:relative;width:100%;aspect-ratio:1/1;
+  background:#fff;border-radius:14px;overflow:hidden;
+  border:1.5px solid #efe1ff;touch-action:none;
+}
+#coloringCanvas{
+  position:absolute;inset:0;width:100%;height:100%;
+  display:block;background:#fff;cursor:crosshair;
+}
+.coloring-svg{
+  position:absolute;inset:0;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+}
+.coloring-svg svg{width:100%;height:100%;display:block}
+
 /* AI render progress bar */
 .ai-pct{
   font-weight:900;color:var(--coral);font-size:16px;min-width:48px;text-align:right;

@@ -8,6 +8,7 @@ const URL_STATUS   = BACKEND + '/api/animate-status';
 const URL_TTS      = BACKEND + '/api/tts';
 const URL_USAGE    = BACKEND + '/api/usage';
 const URL_CHECKOUT = BACKEND + '/api/checkout';
+const URL_OWNER    = BACKEND + '/api/owner-unlock';
 
 function getDeviceId() {
   try {
@@ -44,6 +45,7 @@ function toast(msg, ms = 2400) {
 const state = {
   screen: 'home',
   childName: localStorage.getItem('zografia_child_name') || '',
+  customMotion: '',            // optional Greek motion hint (cleared after each animate)
   draft: null,                 // { image: dataURL, child, title, mood }
   loading: false,
   loadingMsg: '',
@@ -253,6 +255,34 @@ function startVideoPoll(taskId) {
   _videoPollTimer = setTimeout(tick, 6000);
 }
 
+async function ownerUnlock() {
+  const inp = $('#ownerEmail');
+  const email = (inp && inp.value || '').trim();
+  if (!email || !email.includes('@')) {
+    toast('Βάλε ένα έγκυρο email.');
+    return;
+  }
+  try {
+    const res = await fetch(URL_OWNER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': DEVICE_ID },
+      body: JSON.stringify({ email }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      state.usage = data;
+      toast('✓ Ενεργοποιήθηκε η επαγγελματική χρήση!');
+      render();
+    } else if (res.status === 403) {
+      toast('Το email δεν είναι στη λίστα κατόχων.');
+    } else {
+      toast('Σφάλμα. Δοκίμασε ξανά.');
+    }
+  } catch (e) {
+    toast('Πρόβλημα σύνδεσης.');
+  }
+}
+
 async function startCheckout(planId) {
   state.checkoutLoading = planId;
   state.checkoutError = '';
@@ -279,6 +309,8 @@ async function startCheckout(planId) {
 /* ---------- Plan badge ---------- */
 function planLabel(u) {
   if (!u) return '';
+  if (u.plan === 'owner' && u.is_active) return '🔑 Owner · Απεριόριστα';
+  if (u.plan === 'yearly' && u.is_active) return '✓ Ετήσιο · Απεριόριστα';
   if (u.plan === 'full' && u.is_active) return '✓ Full · Απεριόριστα';
   if (u.plan === 'basic' && u.is_active) {
     const rem = (u.remaining == null) ? '∞' : u.remaining;
@@ -363,8 +395,8 @@ function uploadView() {
           ? `<img src="${esc(state.draft.image)}" alt="Η ζωγραφιά σου">`
           : `<div class="draw-empty">
                <div class="big-emoji">🖍️</div>
-               <b>Τράβα φωτό τη ζωγραφιά</b>
-               <small>Φωτογράφισε το χαρτί σου ή ανέβασε εικόνα από το τηλέφωνο.</small>
+               <b>Πώς θες να φτιάξεις τη ζωγραφιά;</b>
+               <small>Διάλεξε τρόπο πιο κάτω.</small>
              </div>`
         }
       </div>
@@ -372,12 +404,25 @@ function uploadView() {
         <button class="btn gold" data-action="open-camera">📷 Τράβα φωτό</button>
         <button class="btn ghost" data-action="pick-file">📁 Από αρχείο</button>
       </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary wide" data-go="coloring">🎨 Ζωγράφισε εδώ μέσα</button>
+      </div>
     </div>
 
     <div class="card">
       <b>👤 Όνομα παιδιού <small style="font-weight:400">(προαιρετικό)</small></b>
       <div class="form-row" style="margin-top:8px">
         <input id="childName" type="text" placeholder="π.χ. Νικόλας" value="${esc(state.childName)}" maxlength="40" />
+      </div>
+    </div>
+
+    <div class="card">
+      <b>✨ Τι θέλεις να κάνει η ζωγραφιά; <small style="font-weight:400">(προαιρετικό)</small></b>
+      <small style="display:block;margin-top:4px;color:var(--muted)">Γράψε σύντομα — η ζωγραφιά μένει η ίδια, μόνο η κίνηση αλλάζει.</small>
+      <div class="form-row" style="margin-top:10px">
+        <textarea id="customMotion" rows="3" maxlength="240"
+                  placeholder="π.χ. ο ήλιος να χαμογελάει, τα παιδιά να χορεύουν απαλά"
+                  style="width:100%;border:1.5px solid #e8d8ff;border-radius:14px;padding:12px 14px;font-size:15px;font-family:inherit;resize:vertical;background:#fff;color:var(--ink);min-height:74px">${esc(state.customMotion || '')}</textarea>
       </div>
     </div>
 
@@ -643,6 +688,17 @@ function contactView() {
       <small>Οι φωτογραφίες ζωγραφιών μένουν τοπικά στη συσκευή σου. Στέλνουμε στην AI μόνο τη ζωγραφιά (όχι όνομα/φωτό παιδιού) για να σου φτιάξει ιστορία.</small>
     </div>
     <button class="btn ghost wide" data-go="terms">📜 Όροι & Απόρρητο</button>
+
+    <details class="card" style="margin-top:14px">
+      <summary style="cursor:pointer;font-weight:800;list-style:none">🔑 Επαγγελματική χρήση / παρουσιάσεις</summary>
+      <small style="display:block;margin-top:8px">Αν είσαι ο/η κάτοχος του app και χρειάζεσαι απεριόριστες χρήσεις για παρουσιάσεις / events, βάλε το επαγγελματικό email σου:</small>
+      <div class="form-row" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <input id="ownerEmail" type="email" placeholder="email@example.com" autocomplete="email" style="flex:1;min-width:180px;border:1.5px solid #e8d8ff;border-radius:14px;padding:12px 14px;font-size:15px;font-family:inherit" />
+        <button class="btn primary" data-action="owner-unlock">Ξεκλείδωμα</button>
+      </div>
+      ${state.usage && state.usage.plan === 'owner' ? '<small style="display:block;margin-top:8px;color:#0a7;font-weight:800">✓ Επαγγελματική χρήση ενεργή — απεριόριστα.</small>' : ''}
+    </details>
+
     ${bottomNav('contact')}
   </section>`;
 }
@@ -695,11 +751,219 @@ function termsView() {
   </section>`;
 }
 
+/* ---------- Coloring Studio ---------- */
+// Inline SVG line templates — kept simple, kid-safe, all in stroke="#222" so they
+// render crisply on a white background. viewBox 0 0 600 600 across the board.
+const COLORING_TEMPLATES = [
+  { name: 'Ήλιος', emoji: '☀️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="300" r="110"/><g><line x1="300" y1="80" x2="300" y2="140"/><line x1="300" y1="460" x2="300" y2="520"/><line x1="80" y1="300" x2="140" y2="300"/><line x1="460" y1="300" x2="520" y2="300"/><line x1="145" y1="145" x2="190" y2="190"/><line x1="410" y1="410" x2="455" y2="455"/><line x1="455" y1="145" x2="410" y2="190"/><line x1="190" y1="410" x2="145" y2="455"/></g><circle cx="270" cy="290" r="6" fill="#222"/><circle cx="330" cy="290" r="6" fill="#222"/><path d="M 260 330 Q 300 360 340 330"/></g></svg>` },
+  { name: 'Καρδιά', emoji: '❤️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><path d="M300 480 C 80 320 80 150 220 150 C 270 150 300 190 300 230 C 300 190 330 150 380 150 C 520 150 520 320 300 480 Z" fill="none" stroke="#222" stroke-width="7" stroke-linejoin="round"/></svg>` },
+  { name: 'Λουλούδι', emoji: '🌸', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="240" r="40"/><ellipse cx="300" cy="130" rx="60" ry="80"/><ellipse cx="410" cy="240" rx="80" ry="60"/><ellipse cx="300" cy="350" rx="60" ry="80"/><ellipse cx="190" cy="240" rx="80" ry="60"/><line x1="300" y1="430" x2="300" y2="560"/><path d="M 300 470 Q 360 460 370 510"/></g></svg>` },
+  { name: 'Σπίτι', emoji: '🏠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><polyline points="100,320 100,520 500,520 500,320"/><polyline points="60,320 300,140 540,320"/><rect x="240" y="380" width="90" height="140"/><rect x="380" y="360" width="70" height="70"/><line x1="380" y1="395" x2="450" y2="395"/><line x1="415" y1="360" x2="415" y2="430"/></g></svg>` },
+  { name: 'Ψάρι', emoji: '🐠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M 80 300 Q 200 160 380 300 Q 200 440 80 300 Z"/><polyline points="380,300 500,200 480,300 500,400 380,300"/><circle cx="160" cy="280" r="8" fill="#222"/><path d="M 220 260 Q 260 240 300 260"/><path d="M 220 300 Q 260 290 300 300"/><path d="M 220 340 Q 260 350 300 340"/></g></svg>` },
+  { name: 'Πεταλούδα', emoji: '🦋', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="300" cy="300" rx="14" ry="120"/><circle cx="300" cy="190" r="14"/><line x1="294" y1="180" x2="280" y2="150"/><line x1="306" y1="180" x2="320" y2="150"/><path d="M 286 240 Q 140 140 130 280 Q 140 360 286 320"/><path d="M 314 240 Q 460 140 470 280 Q 460 360 314 320"/><path d="M 286 320 Q 160 360 200 440 Q 240 460 286 380"/><path d="M 314 320 Q 440 360 400 440 Q 360 460 314 380"/></g></svg>` },
+];
+const COLORING_COLORS = [
+  '#ff3b5c','#ff6cc7','#ffa84d','#ffd166','#9be7a3','#7cc4ff','#b48bff','#7b3fff',
+  '#3a8d4d','#246a8d','#7a4824','#222222'
+];
+const COLORING_BRUSHES = [
+  { size:  8, label: 'Λεπτό' },
+  { size: 18, label: 'Μεσαίο' },
+  { size: 32, label: 'Χοντρό' },
+];
+
+const coloringState = {
+  templateIdx: 0,
+  color: COLORING_COLORS[1],
+  brush: 18,
+  // history of completed strokes for undo, each is a flat ImageData snapshot
+  history: [],
+};
+
+function coloringView() {
+  const tmpl = COLORING_TEMPLATES[coloringState.templateIdx] || COLORING_TEMPLATES[0];
+  const palette = COLORING_COLORS.map(c => `
+    <button class="palette-color${c === coloringState.color ? ' selected' : ''}"
+            data-color="${esc(c)}" aria-label="Χρώμα ${esc(c)}"
+            style="background:${esc(c)}"></button>
+  `).join('');
+  const brushes = COLORING_BRUSHES.map(b => `
+    <button class="brush-pick${b.size === coloringState.brush ? ' selected' : ''}"
+            data-brush="${b.size}" aria-label="${esc(b.label)}">
+      <span class="brush-dot" style="width:${Math.min(b.size,28)}px;height:${Math.min(b.size,28)}px"></span>
+      <small>${esc(b.label)}</small>
+    </button>
+  `).join('');
+  const templates = COLORING_TEMPLATES.map((t, i) => `
+    <button class="tmpl-pick${i === coloringState.templateIdx ? ' selected' : ''}"
+            data-template="${i}" aria-label="${esc(t.name)}">
+      <span class="tmpl-emoji">${esc(t.emoji)}</span>
+      <small>${esc(t.name)}</small>
+    </button>
+  `).join('');
+  return `
+  <section class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-go="upload">←</button>
+      <h2>🎨 Ζωγράφισε εδώ</h2>
+      <span style="width:44px"></span>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="tmpl-row">${templates}</div>
+    </div>
+
+    <div class="card coloring-stage">
+      <div class="coloring-canvas-wrap">
+        <canvas id="coloringCanvas" width="900" height="900"></canvas>
+        <div id="coloringSvg" class="coloring-svg">${tmpl.svg}</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="palette-row">${palette}</div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="brush-row">${brushes}</div>
+    </div>
+
+    <div class="audio-row">
+      <button class="btn ghost" data-action="coloring-undo">↶ Ακύρωση</button>
+      <button class="btn ghost" data-action="coloring-clear">🧽 Σβήσε όλα</button>
+    </div>
+    <button class="btn primary big wide" data-action="coloring-done">✅ Έτοιμη! Πάμε για ζωντάνεμα</button>
+
+    ${bottomNav('home')}
+  </section>`;
+}
+
+let _coloringPainting = false;
+let _coloringLast = null;
+let _coloringPreStroke = null;
+
+function _coloringPointFromEvent(canvas, ev) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * (canvas.width  / rect.width);
+  const y = (ev.clientY - rect.top ) * (canvas.height / rect.height);
+  return { x, y };
+}
+
+function initColoringCanvas() {
+  const canvas = $('#coloringCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const onDown = (ev) => {
+    ev.preventDefault();
+    _coloringPainting = true;
+    // snapshot for undo before this stroke
+    try { _coloringPreStroke = ctx.getImageData(0,0,canvas.width,canvas.height); } catch (e) {}
+    const p = _coloringPointFromEvent(canvas, ev.touches ? ev.touches[0] : ev);
+    _coloringLast = p;
+    ctx.strokeStyle = coloringState.color;
+    ctx.lineWidth   = coloringState.brush * 2;  // canvas is 900px wide → upscale brush
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ctx.lineWidth/2, 0, Math.PI * 2);
+    ctx.fillStyle = coloringState.color;
+    ctx.fill();
+  };
+  const onMove = (ev) => {
+    if (!_coloringPainting) return;
+    ev.preventDefault();
+    const p = _coloringPointFromEvent(canvas, ev.touches ? ev.touches[0] : ev);
+    ctx.beginPath();
+    ctx.moveTo(_coloringLast.x, _coloringLast.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    _coloringLast = p;
+  };
+  const onUp = () => {
+    if (_coloringPainting && _coloringPreStroke) {
+      coloringState.history.push(_coloringPreStroke);
+      if (coloringState.history.length > 20) coloringState.history.shift();
+      _coloringPreStroke = null;
+    }
+    _coloringPainting = false;
+    _coloringLast = null;
+  };
+
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointerleave', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+}
+
+function coloringClear() {
+  const canvas = $('#coloringCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  try { coloringState.history.push(ctx.getImageData(0,0,canvas.width,canvas.height)); } catch (e) {}
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function coloringUndo() {
+  const canvas = $('#coloringCanvas');
+  if (!canvas) return;
+  const snap = coloringState.history.pop();
+  if (!snap) return;
+  const ctx = canvas.getContext('2d');
+  ctx.putImageData(snap, 0, 0);
+}
+
+async function coloringDone() {
+  const canvas = $('#coloringCanvas');
+  const svgWrap = $('#coloringSvg');
+  if (!canvas || !svgWrap) return;
+  // Composite paint + black lines onto an offscreen canvas, then hand it to the
+  // main animate flow as if the user had uploaded a photo.
+  const out = document.createElement('canvas');
+  out.width = 900; out.height = 900;
+  const octx = out.getContext('2d');
+  octx.fillStyle = '#ffffff';
+  octx.fillRect(0, 0, out.width, out.height);
+  // 1) the paint
+  octx.drawImage(canvas, 0, 0);
+  // 2) the SVG lines, on top (we serialize → Blob URL → Image → drawImage)
+  const svgEl = svgWrap.querySelector('svg');
+  if (!svgEl) { _coloringFallback(out); return; }
+  const xml = new XMLSerializer().serializeToString(svgEl);
+  const svg64 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+  const img = new Image();
+  img.onload = () => {
+    octx.drawImage(img, 0, 0, out.width, out.height);
+    const dataURL = out.toDataURL('image/jpeg', 0.92);
+    state.draft = state.draft || {};
+    state.draft.image = dataURL;
+    state.customMotion = state.customMotion || '';
+    state.screen = 'upload';
+    render();
+    toast('Έτοιμη! Πάτα ✨ Ζωντάνεψε για το βίντεο.');
+  };
+  img.onerror = () => _coloringFallback(out);
+  img.src = svg64;
+}
+
+function _coloringFallback(out) {
+  const dataURL = out.toDataURL('image/jpeg', 0.92);
+  state.draft = state.draft || {};
+  state.draft.image = dataURL;
+  state.screen = 'upload';
+  render();
+}
+
 const views = {
   home: homeView,
   upload: uploadView,
   loading: loadingView,
   result: resultView,
+  coloring: coloringView,
   gallery: galleryView,
   paywall: paywallView,
   contact: contactView,
@@ -715,6 +979,13 @@ function render() {
     state.childName = e.target.value;
     try { localStorage.setItem('zografia_child_name', state.childName); } catch (err) {}
   });
+  // custom motion textarea (cleared after each animate)
+  const cm = $('#customMotion');
+  if (cm) cm.addEventListener('input', (e) => { state.customMotion = e.target.value; });
+  // coloring screen post-render init
+  if (state.screen === 'coloring') {
+    initColoringCanvas();
+  }
 }
 
 /* ---------- Animate flow ---------- */
@@ -747,6 +1018,7 @@ async function runAnimate({ regenerate = false } = {}) {
     const data = await callAnimate({
       image: state.draft.image,
       child_name: state.childName || null,
+      custom_motion: state.customMotion || null,
     });
     clearInterval(interval);
     data._image = state.draft.image;
@@ -1076,6 +1348,31 @@ document.addEventListener('click', (e) => {
   if (openEl) { openFromGallery(openEl.dataset.open); return; }
   const planEl = e.target.closest('[data-plan]');
   if (planEl) { startCheckout(planEl.dataset.plan); return; }
+  // coloring: pick color / brush / template (no full re-render, direct DOM swap)
+  const colorEl = e.target.closest('[data-color]');
+  if (colorEl) {
+    coloringState.color = colorEl.dataset.color;
+    document.querySelectorAll('.palette-color.selected').forEach(el => el.classList.remove('selected'));
+    colorEl.classList.add('selected');
+    return;
+  }
+  const brushEl = e.target.closest('[data-brush]');
+  if (brushEl) {
+    coloringState.brush = parseInt(brushEl.dataset.brush, 10) || 18;
+    document.querySelectorAll('.brush-pick.selected').forEach(el => el.classList.remove('selected'));
+    brushEl.classList.add('selected');
+    return;
+  }
+  const tmplEl = e.target.closest('[data-template]');
+  if (tmplEl) {
+    const idx = parseInt(tmplEl.dataset.template, 10) || 0;
+    if (idx !== coloringState.templateIdx) {
+      coloringState.templateIdx = idx;
+      coloringState.history = [];
+      render();
+    }
+    return;
+  }
   const actEl = e.target.closest('[data-action]');
   if (!actEl) return;
   const a = actEl.dataset.action;
@@ -1083,6 +1380,7 @@ document.addEventListener('click', (e) => {
     case 'open-camera': openCamera(); break;
     case 'pick-camera': pickFile(true); break;  // legacy fallback
     case 'pick-file':   pickFile(false); break;
+    case 'owner-unlock': ownerUnlock(); break;
     case 'animate':     runAnimate(); break;
     case 'reanimate':   runAnimate({ regenerate: true }); break;
     case 'audio-play':  playTTS(state.result && (state.result.speakable || state.result.story)); break;
@@ -1090,6 +1388,9 @@ document.addEventListener('click', (e) => {
     case 'save-gallery': saveToGallery(); break;
     case 'share':       shareResult(); break;
     case 'gallery-clear': clearGalleryWithConfirm(); break;
+    case 'coloring-undo':  coloringUndo(); break;
+    case 'coloring-clear': coloringClear(); break;
+    case 'coloring-done':  coloringDone(); break;
   }
 });
 
