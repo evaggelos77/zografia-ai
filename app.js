@@ -124,8 +124,40 @@ async function callAnimate(payload) {
 }
 
 let _currentAudio = null;
+async function playFromUrl(url) {
+  if (!url) return;
+  try { if (_currentAudio) { _currentAudio.pause(); _currentAudio.src = ''; } } catch (e) {}
+  _currentAudio = null;
+  state.audioPlaying = false;
+  const audio = new Audio(url);
+  audio.preload = 'auto';
+  _currentAudio = audio;
+  state.audioPlaying = true;
+  audio.onended = () => {
+    state.audioPlaying = false;
+    if (_currentAudio === audio) _currentAudio = null;
+    render();
+  };
+  audio.onerror = () => {
+    state.audioPlaying = false;
+    toast('Δεν μπόρεσα να παίξω τον ήχο.');
+    render();
+  };
+  render();
+  try { await audio.play(); }
+  catch (e) {
+    state.audioPlaying = false;
+    toast('Πάτα «Άκου ξανά» για να ξεκινήσει η φωνή.');
+    render();
+  }
+}
+
 async function playTTS(text) {
   if (!text) return;
+  // Prefer the audio_url returned by /api/animate-drawing (no extra OpenAI call).
+  const cached = state.result && state.result.audio_url;
+  if (cached) return playFromUrl(cached);
+  // Fallback: synthesize on-demand from /api/tts.
   try { if (_currentAudio) { _currentAudio.pause(); _currentAudio.src = ''; } } catch (e) {}
   _currentAudio = null;
   state.audioPlaying = false;
@@ -759,6 +791,7 @@ function saveToGallery() {
         what_i_see: state.result.what_i_see || '',
         image: state.result._image || '',
         video_url: state.video?.url || state.result._video_url || '',
+        audio_url: state.result.audio_url || '',
         thumb,
       };
       state.gallery = [entry, ...state.gallery].slice(0, 24);
@@ -780,6 +813,7 @@ function openFromGallery(id) {
     follow_up: g.follow_up, what_i_see: g.what_i_see,
     _image: g.image || g.thumb,
     _video_url: g.video_url || '',
+    audio_url: g.audio_url || '',
     speakable: (g.story ? g.story + '\n\n' : '') +
                (g.lines || []).map(l => (l.speaker ? l.speaker + ': ' : '') + l.text).join('\n\n') +
                (g.follow_up ? '\n\n' + g.follow_up : ''),

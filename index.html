@@ -35,9 +35,12 @@
 
   <main id="app" aria-live="polite"></main>
 
-  <input id="fileInput"   type="file" accept="image/*" hidden />
-  <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
-  <canvas id="resizeCanvas" hidden></canvas>
+  <!-- File inputs: kept off-screen (NOT 'hidden' — iOS Safari blocks .click() on hidden file inputs) -->
+  <input id="fileInput"   type="file" accept="image/*"
+         style="position:fixed;left:-9999px;top:0;opacity:0;width:1px;height:1px;pointer-events:none" />
+  <input id="cameraInput" type="file" accept="image/*" capture="environment"
+         style="position:fixed;left:-9999px;top:0;opacity:0;width:1px;height:1px;pointer-events:none" />
+  <canvas id="resizeCanvas" style="display:none"></canvas>
 
   <div id="toast" class="toast" hidden></div>
 
