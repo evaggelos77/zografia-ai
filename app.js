@@ -803,6 +803,8 @@ async function openCamera() {
   if (!overlay) return pickFile(true);  // fallback
   hideCameraError();
   showCameraTip(true);
+  // Explicit display flip (inline style:display:none cannot be cleared by [hidden])
+  overlay.style.display = 'flex';
   overlay.hidden = false;
   // Lock background scroll while overlay is open
   document.body.style.overflow = 'hidden';
@@ -881,7 +883,10 @@ function stopCamera() {
 function closeCamera() {
   stopCamera();
   const overlay = $('#cameraOverlay');
-  if (overlay) overlay.hidden = true;
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.hidden = true;
+  }
   hideCameraError();
   showCameraTip(true);
   // Restore background scroll

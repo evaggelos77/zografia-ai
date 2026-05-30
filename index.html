@@ -43,9 +43,11 @@
   <canvas id="resizeCanvas" style="display:none"></canvas>
   <canvas id="captureCanvas" style="display:none"></canvas>
 
-  <!-- Live Κάμερα overlay (getUserMedia) — fullscreen, top-level above everything -->
-  <div id="cameraOverlay" hidden
-       style="position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;z-index:2147483647;background:rgba(15,10,30,.97);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;margin:0">
+  <!-- Live Κάμερα overlay (getUserMedia) — fullscreen, top-level above everything.
+       NOTE: starts as display:none. openCamera() sets it to flex; closeCamera() restores none.
+       We deliberately don't use [hidden] alone because an inline display: would override it. -->
+  <div id="cameraOverlay"
+       style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;z-index:2147483647;background:rgba(15,10,30,.97);flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;margin:0">
 
     <!-- Top bar: title + BIG close button -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);min-height:64px;flex-shrink:0">
