@@ -238,8 +238,8 @@ function startVideoPoll(taskId) {
         return;
       }
     } catch (e) { /* keep polling */ }
-    // up to ~3 minutes (24 ticks × 8s = 192s)
-    if (_videoPollAttempts >= 24) {
+    // up to ~6 minutes (45 ticks × 8s = 360s) — AKOOL can be slow under load
+    if (_videoPollAttempts >= 45) {
       state.video.status = 'timeout';
       state.video.polling = false;
       _videoPollTimer = null;
@@ -421,7 +421,7 @@ function videoBlock(r) {
         <span class="pulse" aria-hidden="true"></span>
         <div>
           <b>🎬 Φτιάχνω το βίντεο της ζωγραφιάς…</b>
-          <small>Παίρνει ~30-60 δευτερόλεπτα. Στο μεταξύ άκου την ιστορία!</small>
+          <small>Παίρνει ~2-3 λεπτά (μερικές φορές λίγο παραπάνω). Στο μεταξύ άκου την ιστορία!</small>
         </div>
       </div>`;
   }
