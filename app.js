@@ -393,11 +393,10 @@ function homeView() {
 
     <div class="card">
       <b>🎨 ${T('Πώς δουλεύει', 'How it works')}</b>
-      <ol class="how-it-works">
-        <li><b>📷 ${T('Φωτογράφισε', 'Snap')}</b> ${T('τη ζωγραφιά', 'the drawing')}</li>
-        <li><b>✨ ${T('Πάτα «Ζωντάνεψε»', 'Tap «Bring to life»')}</b></li>
-        <li><b>🎬 ${T('Σε ~1 λεπτό', '~1 minute later')}</b>: ${T('ιστορία, φωνή & κίνηση', 'story, voice & motion')}</li>
-      </ol>
+      <small>${T(
+        'Οι μικροί μας φίλοι βλέπουν τη ζωγραφιά τους να <b>ζωντανεύει</b>. 💜 Ζωγραφίζουν, την φωτογραφίζουμε και η AI την επεξεργάζεται για να την ζωντανέψει — με μια ωραία ιστορία και χαρούμενη φωνή. ✨',
+        "Our little friends watch their drawing <b>come alive</b>. 💜 They draw, we snap a photo, and the AI brings it to life — with a lovely story and a cheerful voice. ✨"
+      )}</small>
     </div>
 
     ${last.length ? `

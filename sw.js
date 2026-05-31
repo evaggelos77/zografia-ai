@@ -1,5 +1,5 @@
 // Ζωγραφιά με Ζωή AI — cache-first service worker.
-const CACHE = 'zografia-v20';
+const CACHE = 'zografia-v21';
 const ASSETS = [
   './',
   'index.html',
