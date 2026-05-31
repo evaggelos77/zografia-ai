@@ -542,6 +542,7 @@ function resultView() {
         ? `<div class="audio-row" style="margin:8px 0 14px">
              <button class="btn primary" data-action="share">📤 Στείλε</button>
              <button class="btn gold" data-action="download-video">💾 Αποθήκευση</button>
+             <button class="btn ghost" data-action="play-browser">📺 Παίξε</button>
            </div>`
         : videoBlock(r)}
 
@@ -1312,12 +1313,15 @@ async function downloadVideo(url) {
   try {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('http ' + resp.status);
-    blob = await resp.blob();
+    const rawBlob = await resp.blob();
+    // Force the MIME type to video/mp4 — some CDNs send application/octet-stream
+    // which makes Windows Movies&TV refuse to open the saved file.
+    blob = new Blob([rawBlob], { type: 'video/mp4' });
   } catch (e) {
     toast('Πρόβλημα σύνδεσης. Δοκίμασε ξανά.');
     return;
   }
-  const file = new File([blob], 'zografia-zoi.mp4', { type: blob.type || 'video/mp4' });
+  const file = new File([blob], 'zografia-zoi.mp4', { type: 'video/mp4' });
 
   // Mobile: open the native share/save sheet so the user chooses
   // Save to Photos / Save to Files / AirDrop / WhatsApp / etc.
@@ -1341,6 +1345,14 @@ async function downloadVideo(url) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  toast('Έτοιμο! Αν δεν ανοίγει στο Windows, άνοιξε με VLC ή πάτα «Παίξε».', 5000);
+}
+
+function openVideoInBrowser(url) {
+  if (!url) return;
+  // Opens the video in a new tab where the browser's native HTML5 player plays it.
+  // Works on EVERY OS / device, regardless of installed local players.
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function shareResult() {
@@ -1461,6 +1473,11 @@ document.addEventListener('click', (e) => {
     case 'download-video': {
       const url = (state.video && state.video.url) || (state.result && state.result._video_url) || '';
       if (url) downloadVideo(url);
+      break;
+    }
+    case 'play-browser': {
+      const url = (state.video && state.video.url) || (state.result && state.result._video_url) || '';
+      if (url) openVideoInBrowser(url);
       break;
     }
   }
