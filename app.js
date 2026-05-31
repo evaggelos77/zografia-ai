@@ -1281,6 +1281,19 @@ function captureFromCamera() {
   render();
 }
 
+// Defensive: even if a stale cached HTML left the overlay visible, force it
+// hidden on every app boot. Only openCamera() (explicit user action) can open
+// it after this. Belt-and-braces fix for users still served pre-v8 cache.
+(function ensureCameraOverlayHidden() {
+  function hide() {
+    const o = document.getElementById('cameraOverlay');
+    if (o) { o.style.display = 'none'; o.hidden = true; }
+    if (document.body) document.body.style.overflow = '';
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hide);
+  else hide();
+})();
+
 // Wire the persistent EN/EL language toggle (lives in index.html, top-right).
 (function wireLangBtn() {
   function init() {
