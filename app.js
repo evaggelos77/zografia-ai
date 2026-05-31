@@ -334,8 +334,14 @@ async function startCheckout(planId) {
 function planLabel(u) {
   if (!u) return '';
   if (u.plan === 'owner' && u.is_active) return T('🔑 Owner · Απεριόριστα', '🔑 Owner · Unlimited');
-  if (u.plan === 'yearly' && u.is_active) return T('✓ Ετήσιο · Απεριόριστα', '✓ Yearly · Unlimited');
-  if (u.plan === 'full' && u.is_active) return T('✓ Full · Απεριόριστα', '✓ Full · Unlimited');
+  if (u.plan === 'yearly' && u.is_active) {
+    const rem = (u.remaining == null) ? '∞' : u.remaining;
+    return T(`✓ Ετήσιο · ${rem} ζωντανέματα ακόμα`, `✓ Yearly · ${rem} animations left`);
+  }
+  if (u.plan === 'full' && u.is_active) {
+    const rem = (u.remaining == null) ? '∞' : u.remaining;
+    return T(`✓ Full · ${rem} ζωντανέματα ακόμα`, `✓ Full · ${rem} animations left`);
+  }
   if (u.plan === 'basic' && u.is_active) {
     const rem = (u.remaining == null) ? '∞' : u.remaining;
     return T(`Basic · ${rem} ζωντανέματα ακόμα`, `Basic · ${rem} animations left`);
@@ -685,17 +691,17 @@ function paywallView() {
       name: 'Full',
       price: T('5,99€', '€5.99'), period: T(' / μήνα', ' / month'),
       bullets: [
-        T('✨ Απεριόριστα ζωντανέματα', '✨ Unlimited animations'),
+        T('✨ 50 ζωντανέματα τον μήνα', '✨ 50 animations per month'),
         T('Premium γυναικεία φωνή', 'Premium female voice'),
         T('Άλμπουμ ζωγραφιών', 'Drawings album'),
         T('Νέα ιστορία στην ίδια ζωγραφιά', 'New story on the same drawing'),
       ]
     })}
     ${planCard({
-      id: 'full_yearly', name: T('Full Ετήσιο', 'Full Yearly'),
+      id: 'full_yearly', name: T('Ετήσιο', 'Yearly'),
       price: T('49,99€', '€49.99'), period: T(' / χρόνο', ' / year'),
       bullets: [
-        T('Όλα του Full', 'Everything in Full'),
+        T('600 ζωντανέματα τον χρόνο', '600 animations per year'),
         T('Πληρώνεις μία φορά τον χρόνο', 'Pay once a year'),
         T('Εξοικονόμηση ~22€ / χρόνο', 'Save ~€22 per year'),
       ]
@@ -1401,44 +1407,51 @@ function openFromGallery(id) {
 
 async function downloadVideo(url) {
   if (!url) return;
-  toast('Κατεβάζω το βίντεο…', 2500);
+  toast(T('Κατεβάζω το βίντεο…', 'Downloading the video…'), 3000);
   let blob;
   try {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('http ' + resp.status);
     const rawBlob = await resp.blob();
-    // Force the MIME type to video/mp4 — some CDNs send application/octet-stream
-    // which makes Windows Movies&TV refuse to open the saved file.
+    // Force video/mp4 so Windows Movies&TV (and the OS file picker on iOS)
+    // associate the saved file with the right player.
     blob = new Blob([rawBlob], { type: 'video/mp4' });
   } catch (e) {
-    toast('Πρόβλημα σύνδεσης. Δοκίμασε ξανά.');
+    toast(T('Πρόβλημα σύνδεσης. Δοκίμασε ξανά.', 'Network error. Try again.'));
     return;
   }
   const file = new File([blob], 'zografia-zoi.mp4', { type: 'video/mp4' });
 
-  // Mobile: open the native share/save sheet so the user chooses
-  // Save to Photos / Save to Files / AirDrop / WhatsApp / etc.
-  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+  // Mobile: native share/save sheet (Save to Photos / Files / AirDrop / etc).
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'Η ζωγραφιά μου ζωντάνεψε' });
+      await navigator.share({ files: [file], title: T('Η ζωγραφιά μου ζωντάνεψε', 'My drawing came alive') });
       return;
     } catch (e) {
-      if (e && e.name === 'AbortError') return;  // user cancelled — stop quietly
-      // Otherwise fall through to direct download
+      if (e && e.name === 'AbortError') return;
+      // fall through to download path
     }
   }
 
-  // Desktop / fallback: blob URL + <a download> triggers the browser's Save dialog.
+  // Desktop: blob URL + <a download>. After the click, also open the video
+  // in a new tab as a safety net — if any browser policy silently blocked
+  // the download (rare), the user still has the video on screen with a
+  // right-click "Save video as…" option.
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
   a.download = 'zografia-zoi.mp4';
   a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-  toast('Έτοιμο! Αν δεν ανοίγει στο Windows, άνοιξε με VLC ή πάτα «Παίξε».', 5000);
+
+  toast(T(
+    '✓ Έγινε! Έλεγξε τον φάκελο Λήψεις. Αν δεν εμφανίστηκε, πάτα «Παίξε» και κάνε δεξί-κλικ → Αποθήκευση.',
+    '✓ Done! Check your Downloads folder. If you don’t see it, tap «Play» and right-click → Save video as.'
+  ), 6500);
 }
 
 function openVideoInBrowser(url) {
@@ -1452,46 +1465,127 @@ async function shareResult() {
   if (!state.result) return;
   const r = state.result;
   const videoUrl = (state.video && state.video.url) || r._video_url || '';
-  const title = r.title || 'Η ζωγραφιά μου ζωντάνεψε!';
+  const title = r.title || T('Η ζωγραφιά μου ζωντάνεψε!', 'My drawing came alive!');
   const text = (r.story || '') + (r.follow_up ? '\n\n' + r.follow_up : '') +
                '\n\n— Ζωγραφιά με Ζωή AI · evlabsai.gr';
 
-  // 1) Prefer native share with the actual MP4 file (WhatsApp/Viber/Messenger/Mail).
-  if (videoUrl && navigator.share) {
-    toast('Ετοιμάζω το βίντεο για διαμοιρασμό…');
+  // 1) Mobile / Web Share API with file (iOS/Android opens native share sheet
+  //    that already includes WhatsApp / Viber / Messenger / Photos etc).
+  if (videoUrl && navigator.share && navigator.canShare) {
+    toast(T('Ετοιμάζω το βίντεο…', 'Preparing the video…'));
     try {
       const resp = await fetch(videoUrl);
       if (resp.ok) {
-        const blob = await resp.blob();
-        const file = new File([blob], 'zografia-zoi.mp4', { type: blob.type || 'video/mp4' });
-        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-          await navigator.share({ title, text, files: [file] });
-          return;
+        const rawBlob = await resp.blob();
+        const blob = new Blob([rawBlob], { type: 'video/mp4' });
+        const file = new File([blob], 'zografia-zoi.mp4', { type: 'video/mp4' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title, text, files: [file] });
+            return;
+          } catch (e) {
+            if (e && e.name === 'AbortError') return;
+          }
         }
       }
     } catch (e) {
-      // Fall through to URL/text share.
       console.warn('file share failed', e);
     }
   }
 
-  // 2) Native share with just the URL + text (no file).
-  if (navigator.share) {
-    try {
-      await navigator.share({ title, text, url: videoUrl || undefined });
-      return;
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;  // user cancelled — quietly stop
-    }
-  }
+  // 2) Desktop (and mobile fallback): open our own share menu with explicit
+  //    WhatsApp / Viber / Telegram / Email buttons. Works on any OS.
+  openShareMenu({ videoUrl, title, text });
+}
 
-  // 3) Desktop fallback: copy link to clipboard.
-  try {
-    await navigator.clipboard.writeText(videoUrl ? `${title}\n${videoUrl}` : text);
-    toast('Αντιγράφηκε στο πρόχειρο 💜');
-  } catch (e) {
-    toast('Δεν μπόρεσα να κάνω διαμοιρασμό.');
+function openShareMenu({ videoUrl, title, text }) {
+  // Build a one-shot modal — we replace the body's tail rather than rendering
+  // via the SPA so it sits cleanly above whatever screen is open.
+  let host = document.getElementById('shareModal');
+  if (host) host.remove();
+  host = document.createElement('div');
+  host.id = 'shareModal';
+  host.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,10,30,.78);display:flex;align-items:flex-end;justify-content:center;padding:0';
+
+  const msg = `${title}\n\n${text}${videoUrl ? '\n\n🎬 ' + T('Βίντεο', 'Video') + ': ' + videoUrl : ''}`;
+  const msgEnc = encodeURIComponent(msg);
+  const urlEnc = encodeURIComponent(videoUrl || '');
+  const subjectEnc = encodeURIComponent(title);
+
+  // Compose option list. WhatsApp/Viber/Messenger/Telegram links work both
+  // in their desktop apps (via custom URL schemes) and via web.
+  const opts = [
+    { label: T('💚 WhatsApp', '💚 WhatsApp'),
+      href:  `https://wa.me/?text=${msgEnc}`, target: '_blank' },
+    { label: T('💜 Viber', '💜 Viber'),
+      href:  `viber://forward?text=${msgEnc}`, target: '_self' },
+    { label: T('🔵 Messenger', '🔵 Messenger'),
+      href:  `https://www.facebook.com/sharer/sharer.php?u=${urlEnc}`, target: '_blank' },
+    { label: T('✈️ Telegram', '✈️ Telegram'),
+      href:  `https://t.me/share/url?url=${urlEnc}&text=${encodeURIComponent(title)}`, target: '_blank' },
+    { label: T('✉️ Email', '✉️ Email'),
+      href:  `mailto:?subject=${subjectEnc}&body=${msgEnc}`, target: '_self' },
+  ];
+
+  host.innerHTML = `
+    <div role="dialog" aria-modal="true"
+         style="background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:18px 16px 24px;
+                box-shadow:0 -20px 60px rgba(0,0,0,.4);max-height:85vh;overflow-y:auto;
+                font-family:inherit;animation:shareSlideUp .22s ease-out">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <b style="flex:1;font-size:17px;color:#222">${esc(T('📤 Στείλε το βίντεο', '📤 Share the video'))}</b>
+        <button type="button" id="shareCloseBtn" aria-label="Close"
+                style="background:#f0e7ff;color:#7b3fff;border:0;border-radius:50%;width:36px;height:36px;font-size:18px;font-weight:900;cursor:pointer">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${opts.map(o => `
+          <a href="${esc(o.href)}" target="${esc(o.target)}" rel="noopener noreferrer"
+             style="display:flex;align-items:center;justify-content:center;gap:6px;
+                    padding:14px 10px;border-radius:14px;background:#f6f0ff;color:#222;
+                    text-decoration:none;font-weight:800;font-size:15px;border:1px solid #e8d8ff">
+            ${esc(o.label)}
+          </a>`).join('')}
+        <button type="button" id="shareCopyBtn"
+                style="padding:14px 10px;border-radius:14px;background:#fff7e0;border:1px solid #ffe0c8;color:#7b3fff;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit">
+          📋 ${esc(T('Αντιγραφή link', 'Copy link'))}
+        </button>
+        <button type="button" id="shareDlBtn"
+                style="padding:14px 10px;border-radius:14px;background:linear-gradient(135deg,#ff6cc7,#ffa84d);border:0;color:#fff;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit">
+          💾 ${esc(T('Κατέβασε mp4', 'Download mp4'))}
+        </button>
+      </div>
+      <small style="display:block;text-align:center;color:#888;margin-top:14px;font-size:12px">
+        ${esc(T(
+          'Σε WhatsApp Web / Viber Desktop: αφού στείλεις το κείμενο, σύρε & άσε το mp4 (αν το κατέβασες) για να σταλεί ως βίντεο.',
+          'On WhatsApp Web / Viber Desktop: after sending the text, drag-and-drop the mp4 (if you downloaded it) to send it as a video.'
+        ))}
+      </small>
+    </div>`;
+  // Slide-up keyframe (injected once)
+  if (!document.getElementById('shareModalKeyframes')) {
+    const style = document.createElement('style');
+    style.id = 'shareModalKeyframes';
+    style.textContent = '@keyframes shareSlideUp { from{transform:translateY(100%);opacity:.2} to{transform:translateY(0);opacity:1} }';
+    document.head.appendChild(style);
   }
+  document.body.appendChild(host);
+  document.body.style.overflow = 'hidden';
+
+  const close = () => { host.remove(); document.body.style.overflow = ''; };
+  host.addEventListener('click', (e) => { if (e.target === host) close(); });
+  $('#shareCloseBtn').addEventListener('click', close);
+  $('#shareCopyBtn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(videoUrl ? `${title}\n${videoUrl}` : `${title}\n${text}`);
+      toast(T('Αντιγράφηκε στο πρόχειρο 💜', 'Copied to clipboard 💜'));
+    } catch (e) {
+      toast(T('Δεν αντιγράφηκε.', 'Could not copy.'));
+    }
+  });
+  $('#shareDlBtn').addEventListener('click', () => {
+    close();
+    if (videoUrl) downloadVideo(videoUrl);
+  });
 }
 
 function clearGalleryWithConfirm() {
