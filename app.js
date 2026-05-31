@@ -42,6 +42,28 @@ function toast(msg, ms = 2400) {
 }
 
 /* ---------- State ---------- */
+/* ---------- i18n ---------- */
+// Two-locale app: T('el', 'en') returns the active language string. We keep
+// translations inline at the call site so context never gets lost.
+const SUPPORTED_LANGS = ['el', 'en'];
+let LANG = (function () {
+  try {
+    const stored = localStorage.getItem('zografia_lang');
+    if (SUPPORTED_LANGS.includes(stored)) return stored;
+  } catch (e) {}
+  const nav = (navigator.language || 'el').toLowerCase();
+  return nav.startsWith('en') ? 'en' : 'el';
+})();
+function T(el, en) { return LANG === 'en' ? en : el; }
+function setLang(l) {
+  if (!SUPPORTED_LANGS.includes(l) || l === LANG) return;
+  LANG = l;
+  try { localStorage.setItem('zografia_lang', l); } catch (e) {}
+  document.documentElement.lang = l;
+  const btn = $('#langBtn'); if (btn) btn.textContent = (l === 'el' ? 'EN' : 'EL');
+  render();
+}
+
 const state = {
   screen: 'home',
   childName: localStorage.getItem('zografia_child_name') || '',
@@ -109,16 +131,18 @@ async function fetchUsage() {
 async function callAnimate(payload) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 45000);
+  // Tell the backend which language to write the story in.
+  const body = Object.assign({ lang: LANG }, payload);
   const res = await fetch(URL_ANIMATE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Device-Id': DEVICE_ID },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
     signal: ctrl.signal,
   });
   clearTimeout(timer);
   if (res.status === 402) { const err = new Error('quota_exceeded'); err.code = 402; throw err; }
   if (!res.ok) {
-    let m = 'Δεν τα κατάφερα τώρα. Δοκίμασε ξανά.';
+    let m = T('Δεν τα κατάφερα τώρα. Δοκίμασε ξανά.', "Couldn't do it now. Try again.");
     try { const j = await res.json(); if (j && j.detail) m = String(j.detail); } catch (e) {}
     throw new Error(m);
   }
@@ -309,15 +333,16 @@ async function startCheckout(planId) {
 /* ---------- Plan badge ---------- */
 function planLabel(u) {
   if (!u) return '';
-  if (u.plan === 'owner' && u.is_active) return '🔑 Owner · Απεριόριστα';
-  if (u.plan === 'yearly' && u.is_active) return '✓ Ετήσιο · Απεριόριστα';
-  if (u.plan === 'full' && u.is_active) return '✓ Full · Απεριόριστα';
+  if (u.plan === 'owner' && u.is_active) return T('🔑 Owner · Απεριόριστα', '🔑 Owner · Unlimited');
+  if (u.plan === 'yearly' && u.is_active) return T('✓ Ετήσιο · Απεριόριστα', '✓ Yearly · Unlimited');
+  if (u.plan === 'full' && u.is_active) return T('✓ Full · Απεριόριστα', '✓ Full · Unlimited');
   if (u.plan === 'basic' && u.is_active) {
     const rem = (u.remaining == null) ? '∞' : u.remaining;
-    return `Basic · ${rem} ζωντανέματα ακόμα`;
+    return T(`Basic · ${rem} ζωντανέματα ακόμα`, `Basic · ${rem} animations left`);
   }
   const rem = (u.remaining == null) ? '?' : u.remaining;
-  return `Δωρεάν · ${rem}/${u.quota ?? '?'} ζωντανέματα`;
+  return T(`Δωρεάν · ${rem}/${u.quota ?? '?'} ζωντανέματα`,
+           `Free · ${rem}/${u.quota ?? '?'} animations`);
 }
 function planBadge() {
   const u = state.usage;
@@ -331,10 +356,10 @@ function planBadge() {
 /* ---------- Nav ---------- */
 function bottomNav(active) {
   const items = [
-    ['home',     '🏠', 'Αρχική'],
-    ['gallery',  '🖼️', 'Άλμπουμ'],
-    ['paywall',  '💎', 'Πακέτα'],
-    ['contact',  '💬', 'Βοήθεια'],
+    ['home',     '🏠', T('Αρχική', 'Home')],
+    ['gallery',  '🖼️', T('Άλμπουμ', 'Album')],
+    ['paywall',  '💎', T('Πακέτα', 'Plans')],
+    ['contact',  '💬', T('Βοήθεια', 'Help')],
   ];
   return `<div class="bottom-nav">${items.map(([id, ico, lbl]) =>
     `<button class="${active === id ? 'active' : ''}" data-go="${id}"><span class="ico">${ico}</span>${esc(lbl)}</button>`
@@ -344,31 +369,38 @@ function bottomNav(active) {
 /* ---------- Views ---------- */
 function homeView() {
   const last = state.gallery.slice(0, 4);
+  const dateLocale = LANG === 'en' ? 'en-GB' : 'el-GR';
   return `
   <section class="screen">
     <div class="hero">
-      <img class="logo" src="assets/logo.png" alt="Ζωγραφιά με Ζωή AI" />
-      <h1>Ζωγραφιά με Ζωή AI</h1>
-      <p class="tagline">Η ζωγραφιά σου <b class="rainbow-text">ζωντανεύει!</b> ✨<br>Γίνεται βίντεο, μιλάει και σου λέει μια μαγική ιστορία.</p>
-      <div class="pill">${esc(planLabel(state.usage) || 'Δωρεάν δοκιμή')}</div>
+      <img class="logo" src="assets/logo.png" alt="${T('Ζωγραφιά με Ζωή AI', 'Drawing Alive AI')}" />
+      <h1>${T('Ζωγραφιά με Ζωή AI', 'Drawing Alive AI')}</h1>
+      <p class="tagline">${T(
+        `Η ζωγραφιά σου <b class="rainbow-text">ζωντανεύει!</b> ✨<br>Γίνεται βίντεο, μιλάει και σου λέει μια μαγική ιστορία.`,
+        `Your drawing <b class="rainbow-text">comes alive!</b> ✨<br>It turns into a video, talks and tells you a magical story.`
+      )}</p>
+      <div class="pill">${esc(planLabel(state.usage) || T('Δωρεάν δοκιμή', 'Free trial'))}</div>
     </div>
 
-    <button class="btn primary big wide" data-go="upload">✨ Ζωντάνεψε τη ζωγραφιά μου!</button>
+    <button class="btn primary big wide" data-go="upload">${T('✨ Ζωντάνεψε τη ζωγραφιά μου!', '✨ Bring my drawing to life!')}</button>
 
     <div class="card">
-      <b>🎨 Πώς δουλεύει</b>
-      <small>1) Ζωγραφίζεις σε χαρτί. 2) Πατάς «Ζωντάνεψε» και τραβάς φωτό. 3) Η AI φτιάχνει ιστορία και τη λέει με χαρούμενη φωνή!</small>
+      <b>🎨 ${T('Πώς δουλεύει', 'How it works')}</b>
+      <small>${T(
+        '1) Ζωγραφίζεις σε χαρτί. 2) Πατάς «Ζωντάνεψε» και τραβάς φωτό. 3) Η AI φτιάχνει ιστορία και τη λέει με χαρούμενη φωνή!',
+        '1) Draw on paper. 2) Tap «Bring to life» and take a photo. 3) The AI writes a story and reads it in a cheerful voice!'
+      )}</small>
     </div>
 
     ${last.length ? `
       <div class="card">
-        <b style="display:flex;align-items:center;gap:8px">🖼️ Πρόσφατες <button class="btn ghost" data-go="gallery" style="margin-left:auto;padding:6px 10px;font-size:13px">Όλες</button></b>
+        <b style="display:flex;align-items:center;gap:8px">🖼️ ${T('Πρόσφατες', 'Recent')} <button class="btn ghost" data-go="gallery" style="margin-left:auto;padding:6px 10px;font-size:13px">${T('Όλες', 'All')}</button></b>
         <div class="gallery-grid" style="margin-top:10px">
           ${last.map(g => `
             <button class="gallery-card" data-open="${esc(g.id)}">
-              <img src="${esc(g.thumb || g.image)}" alt="${esc(g.title || 'Ζωγραφιά')}">
-              <b>${esc(g.title || 'Η ζωγραφιά μου')}</b>
-              <small>${new Date(g.timestamp).toLocaleDateString('el-GR')}</small>
+              <img src="${esc(g.thumb || g.image)}" alt="${esc(g.title || T('Ζωγραφιά', 'Drawing'))}">
+              <b>${esc(g.title || T('Η ζωγραφιά μου', 'My drawing'))}</b>
+              <small>${new Date(g.timestamp).toLocaleDateString(dateLocale)}</small>
             </button>
           `).join('')}
         </div>
@@ -385,49 +417,52 @@ function uploadView() {
   <section class="screen">
     <div class="topbar">
       <button class="icon-btn" data-go="home">←</button>
-      <h2>Νέα ζωγραφιά</h2>
+      <h2>${T('Νέα ζωγραφιά', 'New drawing')}</h2>
       ${planBadge() || '<span style="width:44px"></span>'}
     </div>
 
     <div class="card">
       <div class="draw-area">
         ${hasDraft
-          ? `<img src="${esc(state.draft.image)}" alt="Η ζωγραφιά σου">`
+          ? `<img src="${esc(state.draft.image)}" alt="${T('Η ζωγραφιά σου', 'Your drawing')}">`
           : `<div class="draw-empty">
                <div class="big-emoji">🖍️</div>
-               <b>Πώς θες να φτιάξεις τη ζωγραφιά;</b>
-               <small>Διάλεξε τρόπο πιο κάτω.</small>
+               <b>${T('Πώς θες να φτιάξεις τη ζωγραφιά;', 'How would you like to make the drawing?')}</b>
+               <small>${T('Διάλεξε τρόπο πιο κάτω.', 'Choose a method below.')}</small>
              </div>`
         }
       </div>
       <div class="row" style="margin-top:12px">
-        <button class="btn gold" data-action="open-camera">📷 Τράβα φωτό</button>
-        <button class="btn ghost" data-action="pick-file">📁 Από αρχείο</button>
+        <button class="btn gold" data-action="open-camera">📷 ${T('Τράβα φωτό', 'Take photo')}</button>
+        <button class="btn ghost" data-action="pick-file">📁 ${T('Από αρχείο', 'From file')}</button>
       </div>
       <div class="row" style="margin-top:10px">
-        <button class="btn primary wide" data-go="coloring">🎨 Ζωγράφισε εδώ μέσα</button>
+        <button class="btn primary wide" data-go="coloring">🎨 ${T('Ζωγράφισε εδώ μέσα', 'Draw inside the app')}</button>
       </div>
     </div>
 
     <div class="card">
-      <b>👤 Όνομα παιδιού <small style="font-weight:400">(προαιρετικό)</small></b>
+      <b>👤 ${T("Όνομα παιδιού", "Child's name")} <small style="font-weight:400">(${T('προαιρετικό', 'optional')})</small></b>
       <div class="form-row" style="margin-top:8px">
-        <input id="childName" type="text" placeholder="π.χ. Νικόλας" value="${esc(state.childName)}" maxlength="40" />
+        <input id="childName" type="text" placeholder="${T('π.χ. Νικόλας', 'e.g. Sophia')}" value="${esc(state.childName)}" maxlength="40" />
       </div>
     </div>
 
     <div class="card">
-      <b>✨ Τι θέλεις να κάνει η ζωγραφιά; <small style="font-weight:400">(προαιρετικό)</small></b>
-      <small style="display:block;margin-top:4px;color:var(--muted)">Γράψε σύντομα — η ζωγραφιά μένει η ίδια, μόνο η κίνηση αλλάζει.</small>
+      <b>✨ ${T('Τι θέλεις να κάνει η ζωγραφιά;', 'What should the drawing do?')} <small style="font-weight:400">(${T('προαιρετικό', 'optional')})</small></b>
+      <small style="display:block;margin-top:4px;color:var(--muted)">${T(
+        'Γράψε σύντομα — η ζωγραφιά μένει η ίδια, μόνο η κίνηση αλλάζει.',
+        'Write a short hint — the drawing stays the same, only the motion changes.'
+      )}</small>
       <div class="form-row" style="margin-top:10px">
         <textarea id="customMotion" rows="3" maxlength="240"
-                  placeholder="π.χ. ο ήλιος να χαμογελάει, τα παιδιά να χορεύουν απαλά"
+                  placeholder="${T('π.χ. ο ήλιος να χαμογελάει, τα παιδιά να χορεύουν απαλά', 'e.g. the sun smiles, the children sway gently')}"
                   style="width:100%;border:1.5px solid #e8d8ff;border-radius:14px;padding:12px 14px;font-size:15px;font-family:inherit;resize:vertical;background:#fff;color:var(--ink);min-height:74px">${esc(state.customMotion || '')}</textarea>
       </div>
     </div>
 
     <button class="btn primary big wide" data-action="animate" ${hasDraft ? '' : 'disabled'}>
-      ${hasDraft ? '✨ Ζωντάνεψε τη ζωγραφιά!' : 'Πρώτα βάλε μια ζωγραφιά'}
+      ${hasDraft ? T('✨ Ζωντάνεψε τη ζωγραφιά!', '✨ Bring the drawing to life!') : T('Πρώτα βάλε μια ζωγραφιά', 'First add a drawing')}
     </button>
 
     ${bottomNav('home')}
@@ -439,8 +474,11 @@ function loadingView() {
   <section class="screen">
     <div class="loading">
       <div class="spinner" aria-hidden="true"></div>
-      <h2>${esc(state.loadingMsg || 'Ζωντανεύω τη ζωγραφιά σου…')}</h2>
-      <small>Μια στιγμή — ${esc(state.childName?.trim() || 'φίλε μου')}, η AI κοιτάει προσεκτικά κάθε λεπτομέρεια ✨</small>
+      <h2>${esc(state.loadingMsg || T('Ζωντανεύω τη ζωγραφιά σου…', 'Bringing your drawing to life…'))}</h2>
+      <small>${T(
+        `Μια στιγμή — ${state.childName?.trim() || 'φίλε μου'}, η AI κοιτάει προσεκτικά κάθε λεπτομέρεια ✨`,
+        `One moment — ${state.childName?.trim() || 'friend'}, the AI is looking at every detail carefully ✨`
+      )}</small>
     </div>
     ${bottomNav('home')}
   </section>`;
@@ -461,24 +499,22 @@ function videoBlock(r) {
   }
   const v = state.video || {};
   if (v.polling || v.status === 'queued' || v.status === 'processing') {
-    // Smooth progress: rises with each poll tick, capped at 95% until video lands.
-    // Polling cap is 45 ticks × 8s ≈ 6 min, so we scale up to 95% over the first 22 ticks (~3 min).
     const ticks = (typeof _videoPollAttempts === 'number') ? _videoPollAttempts : 0;
     const pct = Math.min(95, Math.round(5 + (ticks / 22) * 90));
     const phaseLabel = (v.status === 'processing')
-      ? 'Φτιάχνω την κίνηση…'
-      : (ticks < 4 ? 'Ξεκινάω το AI…' : 'Στην ουρά του AI…');
+      ? T('Φτιάχνω την κίνηση…', 'Painting the motion…')
+      : (ticks < 4 ? T('Ξεκινάω το AI…', 'Starting the AI…') : T('Στην ουρά του AI…', 'In the AI queue…'));
     return `
       <div class="video-wait">
         <div style="display:flex;align-items:center;gap:12px;width:100%">
           <span class="pulse" aria-hidden="true"></span>
           <div style="flex:1;min-width:0">
             <b>🎬 ${esc(phaseLabel)}</b>
-            <small>~2-3 λεπτά. Στο μεταξύ άκου την ιστορία!</small>
+            <small>${T('~2-3 λεπτά. Στο μεταξύ άκου την ιστορία!', '~2-3 minutes. Meanwhile, listen to the story!')}</small>
           </div>
           <span class="ai-pct" aria-live="polite">${pct}%</span>
         </div>
-        <div class="ai-progress" aria-label="Πρόοδος βίντεο">
+        <div class="ai-progress" aria-label="${T('Πρόοδος βίντεο', 'Video progress')}">
           <div class="ai-progress-bar" style="width:${pct}%"></div>
           <div class="ai-progress-shimmer"></div>
         </div>
@@ -489,8 +525,8 @@ function videoBlock(r) {
       <div class="video-wait" style="background:linear-gradient(135deg,#ffe0e0,#fff0f0);border-color:#ffc7c7">
         <span style="font-size:22px">⚠️</span>
         <div>
-          <b>Το βίντεο δεν τα κατάφερε αυτή τη φορά.</b>
-          <small>Η φωνή + η ιστορία μένουν εδώ — δοκίμασε ξανά αργότερα.</small>
+          <b>${T('Το βίντεο δεν τα κατάφερε αυτή τη φορά.', 'The video didn’t make it this time.')}</b>
+          <small>${T('Η φωνή + η ιστορία μένουν εδώ — δοκίμασε ξανά αργότερα.', 'The voice + story stay here — try again later.')}</small>
         </div>
       </div>`;
   }
@@ -531,8 +567,8 @@ function resultView() {
   <section class="screen">
     <div class="topbar">
       <button class="icon-btn" data-go="home">←</button>
-      <h2>${esc(r.title || 'Η ζωγραφιά σου ζωντάνεψε!')}</h2>
-      <button class="icon-btn" data-action="reanimate" title="Νέα ιστορία">🔁</button>
+      <h2>${esc(r.title || T('Η ζωγραφιά σου ζωντάνεψε!', 'Your drawing came alive!'))}</h2>
+      <button class="icon-btn" data-action="reanimate" title="${T('Νέα ιστορία', 'New story')}">🔁</button>
     </div>
 
     <div class="result-card">
@@ -540,13 +576,13 @@ function resultView() {
 
       ${videoUrl
         ? `<div class="audio-row" style="margin:8px 0 14px">
-             <button class="btn primary" data-action="share">📤 Στείλε</button>
-             <button class="btn gold" data-action="download-video">💾 Αποθήκευση</button>
-             <button class="btn ghost" data-action="play-browser">📺 Παίξε</button>
+             <button class="btn primary" data-action="share">📤 ${T('Στείλε', 'Send')}</button>
+             <button class="btn gold" data-action="download-video">💾 ${T('Αποθήκευση', 'Save')}</button>
+             <button class="btn ghost" data-action="play-browser">📺 ${T('Παίξε', 'Play')}</button>
            </div>`
         : videoBlock(r)}
 
-      ${r.what_i_see ? `<div class="card highlight" style="margin-bottom:12px"><b>👀 Τι βλέπω</b><small>${esc(r.what_i_see)}</small></div>` : ''}
+      ${r.what_i_see ? `<div class="card highlight" style="margin-bottom:12px"><b>👀 ${T('Τι βλέπω', 'What I see')}</b><small>${esc(r.what_i_see)}</small></div>` : ''}
 
       <p class="story">${esc(r.story || '')}</p>
 
@@ -556,13 +592,13 @@ function resultView() {
 
       <div class="audio-row">
         <button class="btn primary" data-action="${state.audioPlaying ? 'audio-stop' : 'audio-play'}">
-          ${state.audioPlaying ? '⏸️ Παύση' : '🔊 Άκου ξανά'}
+          ${state.audioPlaying ? T('⏸️ Παύση', '⏸️ Pause') : T('🔊 Άκου ξανά', '🔊 Listen again')}
         </button>
-        <button class="btn gold" data-action="save-gallery">💾 Αποθήκευση</button>
+        <button class="btn gold" data-action="save-gallery">💾 ${T('Αποθήκευση', 'Save')}</button>
       </div>
       <div class="audio-row">
-        <button class="btn ghost" data-go="upload">🖼️ Νέα ζωγραφιά</button>
-        <button class="btn ghost" data-action="share">📤 Διαμοίρασε</button>
+        <button class="btn ghost" data-go="upload">🖼️ ${T('Νέα ζωγραφιά', 'New drawing')}</button>
+        <button class="btn ghost" data-action="share">📤 ${T('Διαμοίρασε', 'Share')}</button>
       </div>
     </div>
 
@@ -571,28 +607,29 @@ function resultView() {
 }
 
 function galleryView() {
+  const dateLocale = LANG === 'en' ? 'en-GB' : 'el-GR';
   if (!state.gallery.length) {
     return `
     <section class="screen">
-      <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>Το άλμπουμ μου</h2><span style="width:44px"></span></div>
+      <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>${T('Το άλμπουμ μου', 'My album')}</h2><span style="width:44px"></span></div>
       <div class="card" style="text-align:center;padding:30px">
         <div style="font-size:64px">🖼️</div>
-        <b style="margin-top:10px">Άδειο ακόμα</b>
-        <small>Φτιάξε την πρώτη σου ζωντανή ζωγραφιά!</small>
-        <button class="btn primary wide" style="margin-top:14px" data-go="upload">✨ Ξεκίνα</button>
+        <b style="margin-top:10px">${T('Άδειο ακόμα', 'Empty for now')}</b>
+        <small>${T('Φτιάξε την πρώτη σου ζωντανή ζωγραφιά!', 'Create your first living drawing!')}</small>
+        <button class="btn primary wide" style="margin-top:14px" data-go="upload">${T('✨ Ξεκίνα', '✨ Start')}</button>
       </div>
       ${bottomNav('gallery')}
     </section>`;
   }
   return `
   <section class="screen">
-    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>Το άλμπουμ μου</h2><button class="icon-btn" data-action="gallery-clear" title="Καθαρισμός">🗑️</button></div>
+    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>${T('Το άλμπουμ μου', 'My album')}</h2><button class="icon-btn" data-action="gallery-clear" title="${T('Καθαρισμός', 'Clear')}">🗑️</button></div>
     <div class="gallery-grid">
       ${state.gallery.map(g => `
         <button class="gallery-card" data-open="${esc(g.id)}">
-          <img src="${esc(g.thumb || g.image)}" alt="${esc(g.title || 'Ζωγραφιά')}">
-          <b>${esc(g.title || 'Η ζωγραφιά μου')}</b>
-          <small>${new Date(g.timestamp).toLocaleDateString('el-GR')}</small>
+          <img src="${esc(g.thumb || g.image)}" alt="${esc(g.title || T('Ζωγραφιά', 'Drawing'))}">
+          <b>${esc(g.title || T('Η ζωγραφιά μου', 'My drawing'))}</b>
+          <small>${new Date(g.timestamp).toLocaleDateString(dateLocale)}</small>
         </button>
       `).join('')}
     </div>
@@ -612,7 +649,7 @@ function planCard(opts) {
     </div>
     <ul>${bullets}</ul>
     <button class="btn ${opts.featured ? 'primary' : 'gold'} wide" data-plan="${esc(opts.id)}" ${loading ? 'disabled' : ''}>
-      ${loading ? 'Μια στιγμή…' : 'Επιλογή'}
+      ${loading ? T('Μια στιγμή…', 'One moment…') : T('Επιλογή', 'Choose')}
     </button>
   </div>`;
 }
@@ -622,45 +659,50 @@ function paywallView() {
   const out = u.plan === 'trial' && (u.remaining ?? 1) <= 0;
   return `
   <section class="screen">
-    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>💎 Πακέτα</h2><span style="width:44px"></span></div>
+    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>💎 ${T('Πακέτα', 'Plans')}</h2><span style="width:44px"></span></div>
     <div class="card">
-      <b>${out ? '💜 Η δωρεάν δοκιμή τελείωσε' : '✨ Πάμε για περισσότερα ζωντανέματα!'}</b>
+      <b>${out
+        ? T('💜 Η δωρεάν δοκιμή τελείωσε', '💜 Your free trial is over')
+        : T('✨ Πάμε για περισσότερα ζωντανέματα!', '✨ Time for more animations!')}</b>
       <small>${out
-        ? 'Διάλεξε ένα πακέτο για να συνεχίσεις χωρίς όρια.'
-        : 'Με τη συνδρομή ξεκλειδώνεις περισσότερα ή απεριόριστα ζωντανέματα.'}</small>
+        ? T('Διάλεξε ένα πακέτο για να συνεχίσεις χωρίς όρια.', 'Pick a plan to keep going without limits.')
+        : T('Με τη συνδρομή ξεκλειδώνεις περισσότερα ή απεριόριστα ζωντανέματα.', 'A subscription unlocks more or unlimited animations.')}</small>
       ${state.usage ? `<div style="margin-top:10px">${planBadge()}</div>` : ''}
     </div>
 
     ${planCard({
-      id: 'basic_monthly', name: 'Basic', price: '2,99€', period: ' / μήνα',
+      id: 'basic_monthly', name: 'Basic',
+      price: T('2,99€', '€2.99'), period: T(' / μήνα', ' / month'),
       bullets: [
-        '15 ζωντανέματα τον μήνα',
-        'Premium γυναικεία φωνή',
-        'Άλμπουμ ζωγραφιών',
-        'Ακύρωση όποτε θες'
+        T('15 ζωντανέματα τον μήνα', '15 animations per month'),
+        T('Premium γυναικεία φωνή', 'Premium female voice'),
+        T('Άλμπουμ ζωγραφιών', 'Drawings album'),
+        T('Ακύρωση όποτε θες', 'Cancel anytime'),
       ]
     })}
     ${planCard({
-      id: 'full_monthly', featured: true, badge: 'Πιο αγαπημένο',
-      name: 'Full', price: '5,99€', period: ' / μήνα',
+      id: 'full_monthly', featured: true, badge: T('Πιο αγαπημένο', 'Most loved'),
+      name: 'Full',
+      price: T('5,99€', '€5.99'), period: T(' / μήνα', ' / month'),
       bullets: [
-        '✨ Απεριόριστα ζωντανέματα',
-        'Premium γυναικεία φωνή',
-        'Άλμπουμ ζωγραφιών',
-        'Νέα ιστορία στην ίδια ζωγραφιά'
+        T('✨ Απεριόριστα ζωντανέματα', '✨ Unlimited animations'),
+        T('Premium γυναικεία φωνή', 'Premium female voice'),
+        T('Άλμπουμ ζωγραφιών', 'Drawings album'),
+        T('Νέα ιστορία στην ίδια ζωγραφιά', 'New story on the same drawing'),
       ]
     })}
     ${planCard({
-      id: 'full_yearly', name: 'Full Ετήσιο', price: '49,99€', period: ' / χρόνο',
+      id: 'full_yearly', name: T('Full Ετήσιο', 'Full Yearly'),
+      price: T('49,99€', '€49.99'), period: T(' / χρόνο', ' / year'),
       bullets: [
-        'Όλα του Full',
-        'Πληρώνεις μία φορά τον χρόνο',
-        'Εξοικονόμηση ~22€ / χρόνο'
+        T('Όλα του Full', 'Everything in Full'),
+        T('Πληρώνεις μία φορά τον χρόνο', 'Pay once a year'),
+        T('Εξοικονόμηση ~22€ / χρόνο', 'Save ~€22 per year'),
       ]
     })}
 
     ${state.checkoutError ? `<small style="display:block;color:#c11;text-align:center;margin-top:6px">${esc(state.checkoutError)}</small>` : ''}
-    <small style="display:block;text-align:center;color:var(--muted);margin-top:6px">Ασφαλής πληρωμή μέσω Stripe. Ακύρωση οποτεδήποτε.</small>
+    <small style="display:block;text-align:center;color:var(--muted);margin-top:6px">${T('Ασφαλής πληρωμή μέσω Stripe. Ακύρωση οποτεδήποτε.', 'Secure payments via Stripe. Cancel anytime.')}</small>
     ${bottomNav('paywall')}
   </section>`;
 }
@@ -668,37 +710,46 @@ function paywallView() {
 function contactView() {
   return `
   <section class="screen">
-    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>💬 Επικοινωνία</h2><span style="width:44px"></span></div>
+    <div class="topbar"><button class="icon-btn" data-go="home">←</button><h2>💬 ${T('Επικοινωνία', 'Contact')}</h2><span style="width:44px"></span></div>
     <div class="card">
       <b>💜 ev labs ai</b>
-      <small>Φτιάχνουμε ασφαλείς AI εφαρμογές με αγάπη για τα παιδιά και τις οικογένειες. Είμαστε εδώ για κάθε ερώτηση, ιδέα ή υποστήριξη.</small>
+      <small>${T(
+        'Φτιάχνουμε ασφαλείς AI εφαρμογές με αγάπη για τα παιδιά και τις οικογένειες. Είμαστε εδώ για κάθε ερώτηση, ιδέα ή υποστήριξη.',
+        'We build safe AI apps with love for children and families. We are here for any question, idea or support.'
+      )}</small>
     </div>
     <a class="card" href="mailto:info@evlabsai.gr?subject=Ζωγραφιά%20με%20Ζωή%20AI" style="text-decoration:none;color:inherit">
-      <b>✉️ Στείλε μας email</b>
+      <b>✉️ ${T('Στείλε μας email', 'Email us')}</b>
       <small>info@evlabsai.gr</small>
     </a>
     <a class="card" href="https://evlabsai.gr" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit">
-      <b>🌐 Το site μας</b>
-      <small>evlabsai.gr — δες κι άλλες AI εφαρμογές μας</small>
+      <b>🌐 ${T('Το site μας', 'Our website')}</b>
+      <small>${T('evlabsai.gr — δες κι άλλες AI εφαρμογές μας', 'evlabsai.gr — explore our other AI apps')}</small>
     </a>
     <div class="card">
-      <b>📍 Έδρα</b>
-      <small>Χαλάνδρι, Αθήνα · Ελλάδα</small>
+      <b>📍 ${T('Έδρα', 'Based in')}</b>
+      <small>${T('Χαλάνδρι, Αθήνα · Ελλάδα', 'Chalandri, Athens · Greece')}</small>
     </div>
     <div class="card">
-      <b>🛡️ Απόρρητο</b>
-      <small>Οι φωτογραφίες ζωγραφιών μένουν τοπικά στη συσκευή σου. Στέλνουμε στην AI μόνο τη ζωγραφιά (όχι όνομα/φωτό παιδιού) για να σου φτιάξει ιστορία.</small>
+      <b>🛡️ ${T('Απόρρητο', 'Privacy')}</b>
+      <small>${T(
+        'Οι φωτογραφίες ζωγραφιών μένουν τοπικά στη συσκευή σου. Στέλνουμε στην AI μόνο τη ζωγραφιά (όχι όνομα/φωτό παιδιού) για να σου φτιάξει ιστορία.',
+        'Drawing photos stay locally on your device. We send only the drawing to the AI (no name or photo of the child) to generate the story.'
+      )}</small>
     </div>
-    <button class="btn ghost wide" data-go="terms">📜 Όροι & Απόρρητο</button>
+    <button class="btn ghost wide" data-go="terms">📜 ${T('Όροι & Απόρρητο', 'Terms & Privacy')}</button>
 
     <details class="card" style="margin-top:14px">
-      <summary style="cursor:pointer;font-weight:800;list-style:none">🔑 Επαγγελματική χρήση / παρουσιάσεις</summary>
-      <small style="display:block;margin-top:8px">Αν είσαι ο/η κάτοχος του app και χρειάζεσαι απεριόριστες χρήσεις για παρουσιάσεις / events, βάλε το επαγγελματικό email σου:</small>
+      <summary style="cursor:pointer;font-weight:800;list-style:none">🔑 ${T('Επαγγελματική χρήση / παρουσιάσεις', 'Professional use / presentations')}</summary>
+      <small style="display:block;margin-top:8px">${T(
+        'Αν είσαι ο/η κάτοχος του app και χρειάζεσαι απεριόριστες χρήσεις για παρουσιάσεις / events, βάλε το επαγγελματικό email σου:',
+        "If you are the owner of the app and need unlimited usage for presentations / events, enter your professional email:"
+      )}</small>
       <div class="form-row" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
         <input id="ownerEmail" type="email" placeholder="email@example.com" autocomplete="email" style="flex:1;min-width:180px;border:1.5px solid #e8d8ff;border-radius:14px;padding:12px 14px;font-size:15px;font-family:inherit" />
-        <button class="btn primary" data-action="owner-unlock">Ξεκλείδωμα</button>
+        <button class="btn primary" data-action="owner-unlock">${T('Ξεκλείδωμα', 'Unlock')}</button>
       </div>
-      ${state.usage && state.usage.plan === 'owner' ? '<small style="display:block;margin-top:8px;color:#0a7;font-weight:800">✓ Επαγγελματική χρήση ενεργή — απεριόριστα.</small>' : ''}
+      ${state.usage && state.usage.plan === 'owner' ? `<small style="display:block;margin-top:8px;color:#0a7;font-weight:800">${T('✓ Επαγγελματική χρήση ενεργή — απεριόριστα.', '✓ Professional access active — unlimited.')}</small>` : ''}
     </details>
 
     ${bottomNav('contact')}
@@ -757,21 +808,21 @@ function termsView() {
 // Inline SVG line templates — kept simple, kid-safe, all in stroke="#222" so they
 // render crisply on a white background. viewBox 0 0 600 600 across the board.
 const COLORING_TEMPLATES = [
-  { name: 'Ήλιος', emoji: '☀️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="300" r="110"/><g><line x1="300" y1="80" x2="300" y2="140"/><line x1="300" y1="460" x2="300" y2="520"/><line x1="80" y1="300" x2="140" y2="300"/><line x1="460" y1="300" x2="520" y2="300"/><line x1="145" y1="145" x2="190" y2="190"/><line x1="410" y1="410" x2="455" y2="455"/><line x1="455" y1="145" x2="410" y2="190"/><line x1="190" y1="410" x2="145" y2="455"/></g><circle cx="270" cy="290" r="6" fill="#222"/><circle cx="330" cy="290" r="6" fill="#222"/><path d="M 260 330 Q 300 360 340 330"/></g></svg>` },
-  { name: 'Καρδιά', emoji: '❤️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><path d="M300 480 C 80 320 80 150 220 150 C 270 150 300 190 300 230 C 300 190 330 150 380 150 C 520 150 520 320 300 480 Z" fill="none" stroke="#222" stroke-width="7" stroke-linejoin="round"/></svg>` },
-  { name: 'Λουλούδι', emoji: '🌸', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="240" r="40"/><ellipse cx="300" cy="130" rx="60" ry="80"/><ellipse cx="410" cy="240" rx="80" ry="60"/><ellipse cx="300" cy="350" rx="60" ry="80"/><ellipse cx="190" cy="240" rx="80" ry="60"/><line x1="300" y1="430" x2="300" y2="560"/><path d="M 300 470 Q 360 460 370 510"/></g></svg>` },
-  { name: 'Σπίτι', emoji: '🏠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><polyline points="100,320 100,520 500,520 500,320"/><polyline points="60,320 300,140 540,320"/><rect x="240" y="380" width="90" height="140"/><rect x="380" y="360" width="70" height="70"/><line x1="380" y1="395" x2="450" y2="395"/><line x1="415" y1="360" x2="415" y2="430"/></g></svg>` },
-  { name: 'Ψάρι', emoji: '🐠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M 80 300 Q 200 160 380 300 Q 200 440 80 300 Z"/><polyline points="380,300 500,200 480,300 500,400 380,300"/><circle cx="160" cy="280" r="8" fill="#222"/><path d="M 220 260 Q 260 240 300 260"/><path d="M 220 300 Q 260 290 300 300"/><path d="M 220 340 Q 260 350 300 340"/></g></svg>` },
-  { name: 'Πεταλούδα', emoji: '🦋', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="300" cy="300" rx="14" ry="120"/><circle cx="300" cy="190" r="14"/><line x1="294" y1="180" x2="280" y2="150"/><line x1="306" y1="180" x2="320" y2="150"/><path d="M 286 240 Q 140 140 130 280 Q 140 360 286 320"/><path d="M 314 240 Q 460 140 470 280 Q 460 360 314 320"/><path d="M 286 320 Q 160 360 200 440 Q 240 460 286 380"/><path d="M 314 320 Q 440 360 400 440 Q 360 460 314 380"/></g></svg>` },
+  { name: { el: 'Ήλιος',     en: 'Sun'       }, emoji: '☀️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="300" r="110"/><g><line x1="300" y1="80" x2="300" y2="140"/><line x1="300" y1="460" x2="300" y2="520"/><line x1="80" y1="300" x2="140" y2="300"/><line x1="460" y1="300" x2="520" y2="300"/><line x1="145" y1="145" x2="190" y2="190"/><line x1="410" y1="410" x2="455" y2="455"/><line x1="455" y1="145" x2="410" y2="190"/><line x1="190" y1="410" x2="145" y2="455"/></g><circle cx="270" cy="290" r="6" fill="#222"/><circle cx="330" cy="290" r="6" fill="#222"/><path d="M 260 330 Q 300 360 340 330"/></g></svg>` },
+  { name: { el: 'Καρδιά',    en: 'Heart'     }, emoji: '❤️', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><path d="M300 480 C 80 320 80 150 220 150 C 270 150 300 190 300 230 C 300 190 330 150 380 150 C 520 150 520 320 300 480 Z" fill="none" stroke="#222" stroke-width="7" stroke-linejoin="round"/></svg>` },
+  { name: { el: 'Λουλούδι',  en: 'Flower'    }, emoji: '🌸', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="300" cy="240" r="40"/><ellipse cx="300" cy="130" rx="60" ry="80"/><ellipse cx="410" cy="240" rx="80" ry="60"/><ellipse cx="300" cy="350" rx="60" ry="80"/><ellipse cx="190" cy="240" rx="80" ry="60"/><line x1="300" y1="430" x2="300" y2="560"/><path d="M 300 470 Q 360 460 370 510"/></g></svg>` },
+  { name: { el: 'Σπίτι',     en: 'House'     }, emoji: '🏠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><polyline points="100,320 100,520 500,520 500,320"/><polyline points="60,320 300,140 540,320"/><rect x="240" y="380" width="90" height="140"/><rect x="380" y="360" width="70" height="70"/><line x1="380" y1="395" x2="450" y2="395"/><line x1="415" y1="360" x2="415" y2="430"/></g></svg>` },
+  { name: { el: 'Ψάρι',      en: 'Fish'      }, emoji: '🐠', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M 80 300 Q 200 160 380 300 Q 200 440 80 300 Z"/><polyline points="380,300 500,200 480,300 500,400 380,300"/><circle cx="160" cy="280" r="8" fill="#222"/><path d="M 220 260 Q 260 240 300 260"/><path d="M 220 300 Q 260 290 300 300"/><path d="M 220 340 Q 260 350 300 340"/></g></svg>` },
+  { name: { el: 'Πεταλούδα', en: 'Butterfly' }, emoji: '🦋', svg: `<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#222" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="300" cy="300" rx="14" ry="120"/><circle cx="300" cy="190" r="14"/><line x1="294" y1="180" x2="280" y2="150"/><line x1="306" y1="180" x2="320" y2="150"/><path d="M 286 240 Q 140 140 130 280 Q 140 360 286 320"/><path d="M 314 240 Q 460 140 470 280 Q 460 360 314 320"/><path d="M 286 320 Q 160 360 200 440 Q 240 460 286 380"/><path d="M 314 320 Q 440 360 400 440 Q 360 460 314 380"/></g></svg>` },
 ];
 const COLORING_COLORS = [
   '#ff3b5c','#ff6cc7','#ffa84d','#ffd166','#9be7a3','#7cc4ff','#b48bff','#7b3fff',
   '#3a8d4d','#246a8d','#7a4824','#222222'
 ];
 const COLORING_BRUSHES = [
-  { size:  8, label: 'Λεπτό' },
-  { size: 18, label: 'Μεσαίο' },
-  { size: 32, label: 'Χοντρό' },
+  { size:  8, label: { el: 'Λεπτό',  en: 'Thin'   } },
+  { size: 18, label: { el: 'Μεσαίο', en: 'Medium' } },
+  { size: 32, label: { el: 'Χοντρό', en: 'Thick'  } },
 ];
 
 const coloringState = {
@@ -786,28 +837,32 @@ function coloringView() {
   const tmpl = COLORING_TEMPLATES[coloringState.templateIdx] || COLORING_TEMPLATES[0];
   const palette = COLORING_COLORS.map(c => `
     <button class="palette-color${c === coloringState.color ? ' selected' : ''}"
-            data-color="${esc(c)}" aria-label="Χρώμα ${esc(c)}"
+            data-color="${esc(c)}" aria-label="${T('Χρώμα', 'Color')} ${esc(c)}"
             style="background:${esc(c)}"></button>
   `).join('');
-  const brushes = COLORING_BRUSHES.map(b => `
+  const brushes = COLORING_BRUSHES.map(b => {
+    const lbl = b.label[LANG] || b.label.el;
+    return `
     <button class="brush-pick${b.size === coloringState.brush ? ' selected' : ''}"
-            data-brush="${b.size}" aria-label="${esc(b.label)}">
+            data-brush="${b.size}" aria-label="${esc(lbl)}">
       <span class="brush-dot" style="width:${Math.min(b.size,28)}px;height:${Math.min(b.size,28)}px"></span>
-      <small>${esc(b.label)}</small>
-    </button>
-  `).join('');
-  const templates = COLORING_TEMPLATES.map((t, i) => `
+      <small>${esc(lbl)}</small>
+    </button>`;
+  }).join('');
+  const templates = COLORING_TEMPLATES.map((t, i) => {
+    const nm = t.name[LANG] || t.name.el;
+    return `
     <button class="tmpl-pick${i === coloringState.templateIdx ? ' selected' : ''}"
-            data-template="${i}" aria-label="${esc(t.name)}">
+            data-template="${i}" aria-label="${esc(nm)}">
       <span class="tmpl-emoji">${esc(t.emoji)}</span>
-      <small>${esc(t.name)}</small>
-    </button>
-  `).join('');
+      <small>${esc(nm)}</small>
+    </button>`;
+  }).join('');
   return `
   <section class="screen">
     <div class="topbar">
       <button class="icon-btn" data-go="upload">←</button>
-      <h2>🎨 Ζωγράφισε εδώ</h2>
+      <h2>🎨 ${T('Ζωγράφισε εδώ', 'Draw here')}</h2>
       <span style="width:44px"></span>
     </div>
 
@@ -831,10 +886,10 @@ function coloringView() {
     </div>
 
     <div class="audio-row">
-      <button class="btn ghost" data-action="coloring-undo">↶ Ακύρωση</button>
-      <button class="btn ghost" data-action="coloring-clear">🧽 Σβήσε όλα</button>
+      <button class="btn ghost" data-action="coloring-undo">↶ ${T('Ακύρωση', 'Undo')}</button>
+      <button class="btn ghost" data-action="coloring-clear">🧽 ${T('Σβήσε όλα', 'Clear all')}</button>
     </div>
-    <button class="btn primary big wide" data-action="coloring-done">✅ Έτοιμη! Πάμε για ζωντάνεμα</button>
+    <button class="btn primary big wide" data-action="coloring-done">${T('✅ Έτοιμη! Πάμε για ζωντάνεμα', '✅ Done! Bring it to life')}</button>
 
     ${bottomNav('home')}
   </section>`;
@@ -994,16 +1049,24 @@ function render() {
 async function runAnimate({ regenerate = false } = {}) {
   if (!state.draft || !state.draft.image) {
     state.screen = 'upload'; render();
-    toast('Πρώτα βάλε μια ζωγραφιά.');
+    toast(T('Πρώτα βάλε μια ζωγραφιά.', 'First add a drawing.'));
     return;
   }
   state.loading = true;
-  state.loadingMsg = regenerate ? 'Φτιάχνω νέα ιστορία…' : 'Βλέπω τη ζωγραφιά σου…';
+  state.loadingMsg = regenerate
+    ? T('Φτιάχνω νέα ιστορία…', 'Writing a new story…')
+    : T('Βλέπω τη ζωγραφιά σου…', 'Looking at your drawing…');
   state.screen = 'loading';
   state.result = null;
   render();
   // rotate loading messages
-  const msgs = [
+  const msgs = LANG === 'en' ? [
+    'Looking at your drawing…',
+    'Counting the colors…',
+    'Whispering to the drawing…',
+    'Preparing the voice…',
+    'Sprinkling sparkles ✨…',
+  ] : [
     'Βλέπω τη ζωγραφιά σου…',
     'Μετράω τα χρώματα…',
     'Ψιθυρίζω στη ζωγραφιά…',
@@ -1044,12 +1107,12 @@ async function runAnimate({ regenerate = false } = {}) {
       state.screen = 'paywall';
       await fetchUsage();
       render();
-      toast('Τελείωσαν τα δωρεάν ζωντανέματα.');
+      toast(T('Τελείωσαν τα δωρεάν ζωντανέματα.', 'Your free animations ran out.'));
       return;
     }
     state.screen = 'upload';
     render();
-    toast(e.message || 'Κάτι πήγε στραβά. Δοκίμασε ξανά.');
+    toast(e.message || T('Κάτι πήγε στραβά. Δοκίμασε ξανά.', 'Something went wrong. Try again.'));
   }
 }
 
@@ -1217,6 +1280,23 @@ function captureFromCamera() {
   state.screen = 'upload';
   render();
 }
+
+// Wire the persistent EN/EL language toggle (lives in index.html, top-right).
+(function wireLangBtn() {
+  function init() {
+    const btn = $('#langBtn');
+    if (!btn) return;
+    // The label shows the OTHER language (the one a tap will switch TO).
+    btn.textContent = (LANG === 'el' ? 'EN' : 'EL');
+    document.documentElement.lang = LANG;
+    btn.addEventListener('click', () => setLang(LANG === 'el' ? 'en' : 'el'));
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
 
 // Wire camera buttons once (they live in index.html, outside the SPA render).
 (function wireCameraButtons() {
