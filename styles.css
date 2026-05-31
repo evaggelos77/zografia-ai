@@ -480,6 +480,19 @@ h1,h2,h3,h4,b,strong{font-weight:900;letter-spacing:-.005em;color:var(--ink)}
 }
 .coloring-svg svg{width:100%;height:100%;display:block}
 
+/* Decorate uses the photo's actual aspect ratio (no forced square). */
+.decorate-canvas-wrap{
+  position:relative;width:100%;
+  background:#fff;border-radius:14px;overflow:hidden;
+  border:1.5px solid #efe1ff;touch-action:none;
+  display:flex;align-items:center;justify-content:center;
+  max-height:65vh;
+}
+#decorateCanvas{
+  display:block;max-width:100%;max-height:65vh;
+  width:auto;height:auto;cursor:crosshair;background:#fff;
+}
+
 /* AI render progress bar */
 .ai-pct{
   font-weight:900;color:var(--coral);font-size:16px;min-width:48px;text-align:right;

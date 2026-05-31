@@ -444,6 +444,9 @@ function uploadView() {
       </div>
       ${hasDraft ? `
         <div class="row" style="margin-top:10px">
+          <button class="btn gold wide" data-go="decorate">🎨 ${T('Διακόσμησε τη φωτό', 'Decorate the photo')}</button>
+        </div>
+        <div class="row" style="margin-top:8px">
           <button class="btn ghost wide" data-action="draft-delete">🗑️ ${T('Διαγραφή & νέα ζωγραφιά', 'Delete & pick new')}</button>
         </div>` : `
         <div class="row" style="margin-top:12px">
@@ -1029,12 +1032,196 @@ function _coloringFallback(out) {
   render();
 }
 
+/* ---------- Photo Decoration (paint over selfie / any photo) ---------- */
+// Reuses the COLORING_COLORS/BRUSHES palette + coloringState (color/brush/history)
+// so the parent / child has the same tools they know from the Coloring Studio,
+// only the background is their photo instead of an SVG template.
+
+let _decoratePhotoLoaded = false;
+
+function decorateView() {
+  if (!state.draft || !state.draft.image) {
+    state.screen = 'upload';
+    return uploadView();
+  }
+  const palette = COLORING_COLORS.map(c => `
+    <button class="palette-color${c === coloringState.color ? ' selected' : ''}"
+            data-color="${esc(c)}" aria-label="${T('Χρώμα', 'Color')} ${esc(c)}"
+            style="background:${esc(c)}"></button>
+  `).join('');
+  const brushes = COLORING_BRUSHES.map(b => {
+    const lbl = b.label[LANG] || b.label.el;
+    return `
+    <button class="brush-pick${b.size === coloringState.brush ? ' selected' : ''}"
+            data-brush="${b.size}" aria-label="${esc(lbl)}">
+      <span class="brush-dot" style="width:${Math.min(b.size,28)}px;height:${Math.min(b.size,28)}px"></span>
+      <small>${esc(lbl)}</small>
+    </button>`;
+  }).join('');
+  return `
+  <section class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-go="upload">←</button>
+      <h2>🎨 ${T('Διακόσμηση', 'Decorate')}</h2>
+      <span style="width:44px"></span>
+    </div>
+
+    <div class="card highlight" style="margin-bottom:10px">
+      <small>${T(
+        'Διάλεξε χρώμα + πινέλο και ζωγράφισε πάνω στη φωτό σου. (Π.χ. βάφε το πρόσωπο σε σέλφι, βάλε καπέλο στον σκύλο, καρδούλες παντού…)',
+        'Pick a color + brush and paint on top of your photo. (E.g. paint a face on a selfie, draw a hat on the dog, hearts everywhere…)'
+      )}</small>
+    </div>
+
+    <div class="card coloring-stage">
+      <div class="decorate-canvas-wrap">
+        <canvas id="decorateCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="palette-row">${palette}</div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="brush-row">${brushes}</div>
+    </div>
+
+    <div class="audio-row">
+      <button class="btn ghost" data-action="decorate-undo">↶ ${T('Ακύρωση', 'Undo')}</button>
+      <button class="btn ghost" data-action="decorate-clear">🧹 ${T('Καθαρά πίσω στη φωτό', 'Reset to photo')}</button>
+    </div>
+    <button class="btn primary big wide" data-action="decorate-done">${T('✅ Έτοιμη! Πίσω στη ζωγραφιά', '✅ Done! Back to drawing')}</button>
+    <button class="btn ghost wide" style="margin-top:8px" data-action="decorate-skip">${T('⏭️ Παράλειψη (χωρίς ζωγραφική)', '⏭️ Skip (no painting)')}</button>
+
+    ${bottomNav('home')}
+  </section>`;
+}
+
+function initDecorateCanvas() {
+  const canvas = $('#decorateCanvas');
+  if (!canvas || !state.draft || !state.draft.image) return;
+  const ctx = canvas.getContext('2d');
+  _decoratePhotoLoaded = false;
+  coloringState.history = [];
+
+  const img = new Image();
+  img.onload = () => {
+    // Fit the photo into a max 900px canvas keeping aspect ratio. The canvas
+    // gets the photo's natural shape (so a landscape selfie stays landscape).
+    const max = 900;
+    const w = img.naturalWidth || 900, h = img.naturalHeight || 900;
+    const scale = Math.min(1, max / Math.max(w, h));
+    canvas.width  = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    // Snapshot the pristine photo as undo-floor — Reset returns here, not white.
+    try { coloringState.history.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); } catch (e) {}
+    _decoratePhotoLoaded = true;
+  };
+  img.onerror = () => {
+    // Fallback: blank white canvas with same defaults
+    canvas.width = 900; canvas.height = 900;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 900, 900);
+    _decoratePhotoLoaded = true;
+  };
+  img.src = state.draft.image;
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Reuse the painting handlers from the coloring studio — same shape, same UX.
+  const onDown = (ev) => {
+    if (!_decoratePhotoLoaded) return;
+    ev.preventDefault();
+    _coloringPainting = true;
+    try { _coloringPreStroke = ctx.getImageData(0, 0, canvas.width, canvas.height); } catch (e) {}
+    const p = _coloringPointFromEvent(canvas, ev.touches ? ev.touches[0] : ev);
+    _coloringLast = p;
+    ctx.strokeStyle = coloringState.color;
+    ctx.lineWidth   = coloringState.brush * 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = coloringState.color;
+    ctx.fill();
+  };
+  const onMove = (ev) => {
+    if (!_coloringPainting) return;
+    ev.preventDefault();
+    const p = _coloringPointFromEvent(canvas, ev.touches ? ev.touches[0] : ev);
+    ctx.beginPath();
+    ctx.moveTo(_coloringLast.x, _coloringLast.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    _coloringLast = p;
+  };
+  const onUp = () => {
+    if (_coloringPainting && _coloringPreStroke) {
+      coloringState.history.push(_coloringPreStroke);
+      if (coloringState.history.length > 25) coloringState.history.shift();
+      _coloringPreStroke = null;
+    }
+    _coloringPainting = false;
+    _coloringLast = null;
+  };
+
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointerleave', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+}
+
+function decorateClear() {
+  const canvas = $('#decorateCanvas');
+  if (!canvas) return;
+  // "Reset to photo" means: undo every stroke back to the original snapshot.
+  // The pristine photo is the first entry in history; keep it, drop the rest.
+  if (coloringState.history.length > 0) {
+    const pristine = coloringState.history[0];
+    coloringState.history = [pristine];
+    canvas.getContext('2d').putImageData(pristine, 0, 0);
+  }
+}
+
+function decorateUndo() {
+  const canvas = $('#decorateCanvas');
+  if (!canvas) return;
+  // Pop the most recent pre-stroke snapshot. Never pop the very first entry
+  // (the pristine photo) — that's the floor.
+  if (coloringState.history.length > 1) {
+    const snap = coloringState.history.pop();
+    canvas.getContext('2d').putImageData(snap, 0, 0);
+  }
+}
+
+function decorateDone() {
+  const canvas = $('#decorateCanvas');
+  if (!canvas) return;
+  // Hand the painted-over photo back to the upload screen.
+  try {
+    state.draft.image = canvas.toDataURL('image/jpeg', 0.9);
+  } catch (e) {}
+  state.screen = 'upload';
+  render();
+  toast(T('Διακοσμημένη! Πάτα ✨ Ζωντάνεψε.', 'Decorated! Tap ✨ Bring to life.'));
+}
+
+function decorateSkip() {
+  state.screen = 'upload';
+  render();
+}
+
 const views = {
   home: homeView,
   upload: uploadView,
   loading: loadingView,
   result: resultView,
   coloring: coloringView,
+  decorate: decorateView,
   gallery: galleryView,
   paywall: paywallView,
   contact: contactView,
@@ -1056,6 +1243,10 @@ function render() {
   // coloring screen post-render init
   if (state.screen === 'coloring') {
     initColoringCanvas();
+  }
+  // decorate screen post-render init
+  if (state.screen === 'decorate') {
+    initDecorateCanvas();
   }
 }
 
@@ -1664,6 +1855,10 @@ document.addEventListener('click', (e) => {
     case 'coloring-undo':  coloringUndo(); break;
     case 'coloring-clear': coloringClear(); break;
     case 'coloring-done':  coloringDone(); break;
+    case 'decorate-undo':  decorateUndo(); break;
+    case 'decorate-clear': decorateClear(); break;
+    case 'decorate-done':  decorateDone(); break;
+    case 'decorate-skip':  decorateSkip(); break;
     case 'download-video': {
       const url = (state.video && state.video.url) || (state.result && state.result._video_url) || '';
       if (url) downloadVideo(url);
