@@ -394,8 +394,8 @@ function homeView() {
     <div class="card">
       <b>🎨 ${T('Πώς δουλεύει', 'How it works')}</b>
       <small>${T(
-        '1) Ζωγραφίζεις σε χαρτί. 2) Πατάς «Ζωντάνεψε» και τραβάς φωτό. 3) Η AI φτιάχνει ιστορία και τη λέει με χαρούμενη φωνή!',
-        '1) Draw on paper. 2) Tap «Bring to life» and take a photo. 3) The AI writes a story and reads it in a cheerful voice!'
+        '1) Ζωγραφίζεις σε χαρτί. 2) Τραβάς φωτό. 3) Πατάς «Ζωντάνεψε». 4) Η AI φτιάχνει ιστορία και τη λέει με χαρούμενη φωνή!',
+        '1) Draw on paper. 2) Take a photo. 3) Tap «Bring to life». 4) The AI writes a story and reads it in a cheerful voice!'
       )}</small>
     </div>
 
@@ -429,9 +429,12 @@ function uploadView() {
     </div>
 
     <div class="card">
-      <div class="draw-area">
+      <div class="draw-area" style="position:relative">
         ${hasDraft
-          ? `<img src="${esc(state.draft.image)}" alt="${T('Η ζωγραφιά σου', 'Your drawing')}">`
+          ? `<img src="${esc(state.draft.image)}" alt="${T('Η ζωγραφιά σου', 'Your drawing')}">
+             <button type="button" class="draft-delete-btn" data-action="draft-delete"
+                     aria-label="${T('Διαγραφή', 'Delete')}"
+                     title="${T('Διαγραφή & νέα ζωγραφιά', 'Delete & pick new')}">×</button>`
           : `<div class="draw-empty">
                <div class="big-emoji">🖍️</div>
                <b>${T('Πώς θες να φτιάξεις τη ζωγραφιά;', 'How would you like to make the drawing?')}</b>
@@ -439,13 +442,17 @@ function uploadView() {
              </div>`
         }
       </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn gold" data-action="open-camera">📷 ${T('Τράβα φωτό', 'Take photo')}</button>
-        <button class="btn ghost" data-action="pick-file">📁 ${T('Από αρχείο', 'From file')}</button>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary wide" data-go="coloring">🎨 ${T('Ζωγράφισε εδώ μέσα', 'Draw inside the app')}</button>
-      </div>
+      ${hasDraft ? `
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost wide" data-action="draft-delete">🗑️ ${T('Διαγραφή & νέα ζωγραφιά', 'Delete & pick new')}</button>
+        </div>` : `
+        <div class="row" style="margin-top:12px">
+          <button class="btn gold" data-action="open-camera">📷 ${T('Τράβα φωτό', 'Take photo')}</button>
+          <button class="btn ghost" data-action="pick-file">📁 ${T('Από αρχείο', 'From file')}</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary wide" data-go="coloring">🎨 ${T('Ζωγράφισε εδώ μέσα', 'Draw inside the app')}</button>
+        </div>`}
     </div>
 
     <div class="card">
@@ -681,7 +688,7 @@ function paywallView() {
       id: 'basic_monthly', name: 'Basic',
       price: T('2,99€', '€2.99'), period: T(' / μήνα', ' / month'),
       bullets: [
-        T('15 ζωντανέματα τον μήνα', '15 animations per month'),
+        T('10 ζωντανέματα τον μήνα', '10 animations per month'),
         T('Premium γυναικεία φωνή', 'Premium female voice'),
         T('Άλμπουμ ζωγραφιών', 'Drawings album'),
         T('Ακύρωση όποτε θες', 'Cancel anytime'),
@@ -692,7 +699,7 @@ function paywallView() {
       name: 'Full',
       price: T('5,99€', '€5.99'), period: T(' / μήνα', ' / month'),
       bullets: [
-        T('✨ 50 ζωντανέματα τον μήνα', '✨ 50 animations per month'),
+        T('✨ 25 ζωντανέματα τον μήνα', '✨ 25 animations per month'),
         T('Premium γυναικεία φωνή', 'Premium female voice'),
         T('Άλμπουμ ζωγραφιών', 'Drawings album'),
         T('Νέα ιστορία στην ίδια ζωγραφιά', 'New story on the same drawing'),
@@ -702,7 +709,7 @@ function paywallView() {
       id: 'full_yearly', name: T('Ετήσιο', 'Yearly'),
       price: T('49,99€', '€49.99'), period: T(' / χρόνο', ' / year'),
       bullets: [
-        T('600 ζωντανέματα τον χρόνο', '600 animations per year'),
+        T('300 ζωντανέματα τον χρόνο', '300 animations per year'),
         T('Πληρώνεις μία φορά τον χρόνο', 'Pay once a year'),
         T('Εξοικονόμηση ~22€ / χρόνο', 'Save ~€22 per year'),
       ]
@@ -1665,6 +1672,15 @@ document.addEventListener('click', (e) => {
     case 'play-browser': {
       const url = (state.video && state.video.url) || (state.result && state.result._video_url) || '';
       if (url) openVideoInBrowser(url);
+      break;
+    }
+    case 'draft-delete': {
+      // Clear the staged image so the parent / child can pick a new one
+      // (camera / file / coloring) without having to first run animate.
+      state.draft = null;
+      state.customMotion = '';
+      render();
+      toast(T('Έτοιμη για νέα ζωγραφιά.', 'Ready for a new drawing.'));
       break;
     }
   }
