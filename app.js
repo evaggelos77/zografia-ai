@@ -9,6 +9,7 @@ const URL_TTS      = BACKEND + '/api/tts';
 const URL_USAGE    = BACKEND + '/api/usage';
 const URL_CHECKOUT = BACKEND + '/api/checkout';
 const URL_OWNER    = BACKEND + '/api/owner-unlock';
+const URL_DL_PROXY = BACKEND + '/api/download-video';
 
 function getDeviceId() {
   try {
@@ -1433,24 +1434,23 @@ async function downloadVideo(url) {
     }
   }
 
-  // Desktop: blob URL + <a download>. After the click, also open the video
-  // in a new tab as a safety net — if any browser policy silently blocked
-  // the download (rare), the user still has the video on screen with a
-  // right-click "Save video as…" option.
-  const objectUrl = URL.createObjectURL(blob);
+  // Desktop: use our backend proxy URL with Content-Disposition: attachment.
+  // The browser will save the file as zografia-zoi.mp4 with a guaranteed
+  // video/mp4 MIME — sidesteps the Windows Media Player "can't open" quirk
+  // that bit users when we did the blob+<a download> dance.
+  const proxyUrl = URL_DL_PROXY + '?url=' + encodeURIComponent(url);
   const a = document.createElement('a');
-  a.href = objectUrl;
+  a.href = proxyUrl;
   a.download = 'zografia-zoi.mp4';
   a.rel = 'noopener';
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
 
   toast(T(
-    '✓ Έγινε! Έλεγξε τον φάκελο Λήψεις. Αν δεν εμφανίστηκε, πάτα «Παίξε» και κάνε δεξί-κλικ → Αποθήκευση.',
-    '✓ Done! Check your Downloads folder. If you don’t see it, tap «Play» and right-click → Save video as.'
+    '✓ Κατεβαίνει το zografia-zoi.mp4 στον φάκελο Λήψεις. Αν δεν παίζει, πάτα «Παίξε» — παίζει πάντα στο browser.',
+    '✓ Downloading zografia-zoi.mp4 to your Downloads folder. If it doesn’t play, tap «Play» — that always works in the browser.'
   ), 6500);
 }
 
