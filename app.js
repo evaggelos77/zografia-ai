@@ -1667,22 +1667,32 @@ async function shareResult() {
   const text = (r.story || '') + (r.follow_up ? '\n\n' + r.follow_up : '') +
                '\n\n— Ζωγραφιά με Ζωή AI · evlabsai.gr';
 
-  // 1) Mobile / Web Share API with file (iOS/Android opens native share sheet
-  //    that already includes WhatsApp / Viber / Messenger / Photos etc).
+  // 1) Mobile / Web Share API with file. Critical iOS quirk: when you call
+  //    navigator.share({title, text, files: […]}) and the user picks iMessage,
+  //    iOS drops the file and sends only the text. Sharing ONLY the file (no
+  //    text/url) makes iMessage / WhatsApp / Viber receive it as a real video
+  //    attachment. The title still shows as the message preview.
+  //
+  //    We also fetch through our backend proxy URL (same-origin, correct MIME)
+  //    instead of the AKOOL CDN directly — avoids the rare CORS / blob-type
+  //    issue that made the file silently turn into a 0-byte attachment.
   if (videoUrl && navigator.share && navigator.canShare) {
     toast(T('Ετοιμάζω το βίντεο…', 'Preparing the video…'));
     try {
-      const resp = await fetch(videoUrl);
+      const proxyUrl = URL_DL_PROXY + '?url=' + encodeURIComponent(videoUrl);
+      const resp = await fetch(proxyUrl);
       if (resp.ok) {
         const rawBlob = await resp.blob();
         const blob = new Blob([rawBlob], { type: 'video/mp4' });
         const file = new File([blob], 'zografia-zoi.mp4', { type: 'video/mp4' });
         if (navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({ title, text, files: [file] });
+            // FILE ONLY — no text, no url. Title is shown by iOS as preview.
+            await navigator.share({ files: [file], title });
             return;
           } catch (e) {
             if (e && e.name === 'AbortError') return;
+            console.warn('share with file failed', e);
           }
         }
       }
